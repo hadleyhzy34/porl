@@ -6,6 +6,8 @@ import torch.nn.functional as F
 from torch.optim.lr_scheduler import CosineAnnealingLR
 import pdb
 from util.util import compute_batched, update_exponential_moving_average
+from agent.value_functions import TwinV
+from agent.policy import GaussianPolicy
 
 
 EXP_ADV_MAX = 100.
@@ -18,27 +20,47 @@ def asymmetric_l2_loss(u, tau):
 
 class SORL(nn.Module):
     def __init__(self,
-                 v_net,
-                 policy,
-                 backbone,
+                 args,
                  max_steps,
                  tau,
                  alpha,
                  device=torch.device('cpu'),
+                 backbone = None,
                  value_lr=1e-4,
                  policy_lr=1e-4,
                  discount=0.99,
                  beta=0.005):
         super().__init__()
         self.device = device
-        self.backbone = backbone.to(device)
+        self.backbone = backbone
+
+        if self.backbone is None:
+            self.v_net = TwinV(args.state_size,
+                               layer_norm=args.layer_norm,
+                               hidden_dim=args.hidden_dim,
+                               n_hidden=args.n_hidden).to(device)
+
+            self.policy = GaussianPolicy(args.state_size,
+                                         args.action_size,
+                                         hidden_dim=args.hidden_dim,
+                                         n_hidden=args.n_hidden).to(device)
+        else:
+            self.backbone = self.backbone.to(device)
+            self.v_net = TwinV(args.feature_dim,
+                               layer_norm=args.layer_norm,
+                               hidden_dim=args.hidden_dim,
+                               n_hidden=args.n_hidden).to(device)
+
+            self.policy = GaussianPolicy(args.feature_dim,
+                                         args.action_size,
+                                         hidden_dim=args.hidden_dim,
+                                         n_hidden=args.n_hidden).to(device)
+
         # value function
-        self.v_net = v_net.to(device)
-        self.v_tgt = copy.deepcopy(v_net).requires_grad_(False).to(device)
+        self.v_tgt = copy.deepcopy(self.v_net).requires_grad_(False).to(device)
         self.v_optimizer = torch.optim.Adam(self.v_net.parameters(), lr=value_lr)
 
         # agent policy
-        self.policy = policy.to(device)
         self.policy_optimizer = torch.optim.Adam(self.policy.parameters(), lr=policy_lr)
         self.lr_schedule = CosineAnnealingLR(self.policy_optimizer, max_steps)
 
@@ -47,19 +69,24 @@ class SORL(nn.Module):
         self.discount = discount
         self.beta = beta
 
+    def select_action(self, observations):
+        action_distri = self.policy(observations)
+        return action_distri.mean.cpu().numpy()
+
     def update(self, observations, actions, rewards, next_observations, terminals):
-        pdb.set_trace()
+        # pdb.set_trace()
         # obtain latent feature
-        obs_feat = self.backbone(observations)
+        if self.backbone is not None:
+            observations = self.backbone(observations)
+            next_observations = self.backbone(observations)
 
         # the network will NOT update
         with torch.no_grad():
-            nxt_obs_feat = self.backbone(next_observations)
-            next_v = self.v_tgt(nxt_obs_feat)  #(b,)
+            next_v = self.v_tgt(next_observations)  #(b,)
 
         # Update value function
         target_v = rewards + (1. - terminals.float()) * self.discount * next_v
-        vs = self.v_net.both(obs_feat)
+        vs = self.v_net.both(observations)
         v_loss = sum(asymmetric_l2_loss(target_v - v, self.tau) for v in vs) / len(vs)
         self.v_optimizer.zero_grad(set_to_none=True)
         v_loss.backward()
@@ -69,12 +96,12 @@ class SORL(nn.Module):
         update_exponential_moving_average(self.v_tgt, self.v_net, self.beta)
 
         # Update policy
-        v = self.v_net(obs_feat)
+        v = self.v_net(observations)
         adv = target_v - v
-        # weight = torch.exp(self.alpha * adv)
-        weight = torch.exp(adv / self.alpha)
+        weight = torch.exp(self.alpha * adv)
+        # weight = torch.exp(adv / self.alpha)
         weight = torch.clamp_max(weight, EXP_ADV_MAX).detach()
-        action_distri = self.policy(obs_feat.detach())
+        action_distri = self.policy(observations.detach())
         g_loss = -action_distri.log_prob(actions)
         g_loss = torch.mean(weight * g_loss)
         self.policy_optimizer.zero_grad(set_to_none=True)

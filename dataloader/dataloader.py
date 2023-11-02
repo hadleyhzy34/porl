@@ -21,8 +21,8 @@ class CustomDataset(Dataset):
             data['state'],
             [data['reward']],
             data['next_state'],
-            [data['done'],
-            data['action']]
+            [data['done']],
+            data['action']
             ])
         data = torch.from_numpy(data.astype(np.float32)).to(self.device)
 

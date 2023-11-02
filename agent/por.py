@@ -55,13 +55,16 @@ class POR(nn.Module):
         update_exponential_moving_average(self.v_target, self.vf, self.beta)
 
         # Update goal policy
+        # pdb.set_trace()
         v = self.vf(observations)
         adv = target_v - v
-        weight = torch.exp(self.alpha * adv)
-        # weight = torch.exp(adv / self.alpha)
+        # weight = torch.exp(self.alpha * adv)
+        weight = torch.exp(adv / self.alpha)
         weight = torch.clamp_max(weight, EXP_ADV_MAX).detach()
         goal_out = self.goal_policy(observations)
         g_loss = -goal_out.log_prob(next_observations)
+        if g_loss.min() <= 0:
+            pdb.set_trace()
         g_loss = torch.mean(weight * g_loss)
         self.goal_policy_optimizer.zero_grad(set_to_none=True)
         g_loss.backward()

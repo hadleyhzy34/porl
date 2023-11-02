@@ -20,7 +20,7 @@ import numpy as np
 from stable_baselines3.common.env_checker import check_env
 
 class Env(gym.Env):
-    def __init__(self, namespace, state_size, action_size, rank):
+    def __init__(self, namespace, state_size, action_size, rank = 0):
         super().__init__()
         # self.action_space = spaces.Box(low=-1.,high=1.,shape=(2,),dtype=np.float32)
         self.action_space = spaces.Discrete(action_size)

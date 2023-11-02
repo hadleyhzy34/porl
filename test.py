@@ -1,29 +1,42 @@
-import gym
-from gym.envs.box2d import CarRacing
+import rospy
+import statistics
+from env.gazebo import Env
 
-from stable_baselines.common.policies import CnnPolicy
-from stable_baselines.common.vec_env import DummyVecEnv
-from stable_baselines import PPO2
+def evaluate_policy(agent, args):
+    rospy.init_node(args.namespace)
 
-if __name__=='__main__':
-    env = lambda :  CarRacing(
-        grayscale=1,
-        show_info_panel=0,
-        discretize_actions="hard",
-        frames_per_state=4,
-        num_lanes=1,
-        num_tracks=1,
-        )
+    EPISODES = args.test_episodes
 
-    #env = getattr(environments, env)
-    env = DummyVecEnv([env])
+    env = Env(args.namespace,args.state_size,args.action_size)
 
-    model = PPO2.load('car_racing_weights.pkl')
+    scores = []
+    success = []
+    steps = []
 
-    model.set_env(env)
+    for e in range(EPISODES):
+        done = False
+        state = env.reset()
 
-    obs = env.reset()
-    while True:
-        action, _states = model.predict(obs)
-        obs, rewards, dones, info = env.step(action)
-        env.render()
+        score = 0
+        for t in range(agent.episode_step):
+            action = agent.select_action(state)
+
+            # execute actions and wait until next scan(state)
+            next_state, reward, done, truncated, info = env.step(action)
+
+            score += reward
+            state = next_state
+
+            if t == agent.episode_step - 1:
+                done = True
+
+            if done:
+                scores.append(score)
+                steps.append(t)
+                if info['status'] == 'goal':
+                    success.append(1.)
+                else:
+                    success.append(0.)
+                break
+
+    return statistics.fmean(steps), statistics.fmean(scores), statistics.fmean(success)

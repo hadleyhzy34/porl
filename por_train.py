@@ -1,10 +1,9 @@
-from email.policy import default
 import torch
+import random
+import string
 import numpy as np
-import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 from agent.value_functions import TwinV
-from agent.agent import Agent
 from dataloader.dataloader import CustomDataset
 import pdb
 from matplotlib import pyplot as plt
@@ -14,12 +13,17 @@ import time
 import argparse
 from agent.policy import GaussianPolicy
 from agent.por import POR
+from torch.utils.tensorboard import SummaryWriter
 
 def train(args):
     torch.autograd.set_detect_anomaly(True)
     device = torch.device('cpu')
     if torch.cuda.is_available():
         device = torch.device(args.device)
+
+    #summary writer session name
+    res = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
+    writer = SummaryWriter(f'./log/{res}')
 
     state_size = args.state_size
     action_size = args.action_size
@@ -55,26 +59,15 @@ def train(args):
                                   batch_size=args.batch_size,
                                   shuffle=True)
 
-    total_all_loss = []
-    total_dist_loss = []
-    total_coll_loss = []
-    total_angl_loss = []
-    total_bspline_loss = []
-    # total_step_loss = []
+    steps = 0
 
     for i in range(args.episodes):
-        # print(f"current learning rate: {agent.optimizer.param_groups[0]['lr']}")
-        # total_loss = []
-        # dist_loss = []
-        # coll_loss = []
-        # angl_loss = []
-        # bspline_loss = []
-        # step_loss = []
         e_v_loss = []
         e_g_loss = []
 
         for data in (pbar := tqdm(train_dataloader)):
             # pdb.set_trace()
+            # s,r,s',d,a
             observations = data[:,:362]
             rewards = data[:,362]
             next_observations = data[:,363:-3]
@@ -83,17 +76,6 @@ def train(args):
                                                        next_observations,
                                                        rewards,
                                                        dones)
-            # data = data.to(Config.Train.device).float()
-            # traj = agent.path_planning(data)
-            #
-            # # loss, loss_dist, loss_col, loss_angle, loss_bspline = agent.learn(traj, data, train=True)
-            # loss, loss_dist, loss_col, loss_angle = agent.learn(traj, data, train=True)
-            # total_loss.append(loss)
-            # dist_loss.append(loss_dist)
-            # coll_loss.append(loss_col)
-            # angl_loss.append(loss_angle)
-            # bspline_loss.append(loss_bspline)
-            # step_loss.append(loss_step)
             e_v_loss.append(v_loss)
             e_g_loss.append(g_loss)
 
@@ -101,8 +83,19 @@ def train(args):
                                  f"v_loss: {statistics.fmean(e_v_loss):.4f}||"
                                  f"g_loss: {statistics.fmean(e_g_loss):.4f} "
                     )
-            # pbar.set_description("loss: %.4f, dist: %.4f, coll: %.4f, angle: %.4f, bspline: %.4f"%(statistics.fmean(total_loss),statistics.fmean(dist_loss),statistics.fmean(coll_loss),statistics.fmean(angl_loss),statistics.fmean(bspline_loss)))
-            # pbar.refresh()
+
+            writer.add_scalar('v_loss',v_loss, steps)
+            writer.add_scalar('g_loss',g_loss, steps)
+            steps += 1
+
+        # # evaluate policy every 10 episodes
+        # if (i+1) % 10 == 0:
+        #     mean_stp_length, mean_rew, mean_success_rate = evaluate_policy(agent)
+        #     print(f"episodes: {i}||"
+        #           f"mean_step_length: {mean_stp_length}||"
+        #           f"mean_reward: {mean_rew}||"
+        #           f"mean_success_rate: {mean_success_rate}"
+        #           )
 
         # t = time.localtime()
         # current_time = time.strftime("%H_%M_%S", t)
@@ -127,7 +120,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--namespace', type=str, default='tb3')
     parser.add_argument('--state_size', type=int, default=362)
-    parser.add_argument('--action_size', type=int, default=5)
+    parser.add_argument('--action_size', type=int, default=2)
     parser.add_argument('--episodes', type=int, default=5000)
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--batch_size', type=int, default=256)
