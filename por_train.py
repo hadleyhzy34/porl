@@ -77,9 +77,12 @@ def train(args):
             # pdb.set_trace()
             observations = data[:,:362]
             rewards = data[:,362]
-            next_observations = data[:,363:-1]
-            dones = data[:,-1]
-            v_loss, g_loss = agent.por_residual_update(observations,next_observations,rewards,dones)
+            next_observations = data[:,363:-3]
+            dones = data[:,-3]
+            v_loss, g_loss = agent.por_residual_update(observations,
+                                                       next_observations,
+                                                       rewards,
+                                                       dones)
             # data = data.to(Config.Train.device).float()
             # traj = agent.path_planning(data)
             #
@@ -127,7 +130,7 @@ if __name__ == '__main__':
     parser.add_argument('--action_size', type=int, default=5)
     parser.add_argument('--episodes', type=int, default=5000)
     parser.add_argument('--device', type=str, default='cuda')
-    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--replay_buffer_size', type=int, default=10_000)
     parser.add_argument('--episode_step', type=int, default=500)
     parser.add_argument('--lr', type=float, default=0.001)

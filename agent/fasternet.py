@@ -9,7 +9,7 @@ from torch import Tensor
 import copy
 import os
 import pdb
-
+from util.costmap import state2costmap
 # try:
 #     from mmdet.models.builder import BACKBONES as det_BACKBONES
 #     from mmdet.utils import get_root_logger
@@ -341,6 +341,7 @@ class FasterNet(nn.Module):
     def forward_cls(self, x):
         # output only the features of last layer for image classification
         # pdb.set_trace()
+        x = state2costmap(x)
         x = self.patch_embed(x)
         x = self.stages(x)
         x = self.avgpool_pre_head(x)  # B C 1 1

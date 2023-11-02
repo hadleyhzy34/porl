@@ -20,7 +20,7 @@ import numpy as np
 from stable_baselines3.common.env_checker import check_env
 
 class Env(gym.Env):
-    def __init__(self, action_size, state_size, rank_update_interval = 150, namespace='tb3'):
+    def __init__(self, namespace, state_size, action_size, rank):
         super().__init__()
         # self.action_space = spaces.Box(low=-1.,high=1.,shape=(2,),dtype=np.float32)
         self.action_space = spaces.Discrete(action_size)
@@ -31,7 +31,7 @@ class Env(gym.Env):
         self.status = 'initialized'
         self.map_x = -10.
         self.map_y = -10.
-        self.rank = 0
+        self.rank = rank
         self.heading = 0
         self.action_size = action_size
         self.initGoal = True
@@ -52,7 +52,6 @@ class Env(gym.Env):
         self.cur_step = 0
         self.episode_step = 500
         self.cur_episode = 0
-        self.rank_update_interval = rank_update_interval
 
     def getRelativeGoal(self):
         """
@@ -248,9 +247,6 @@ class Env(gym.Env):
         self.cur_step = 0
         self.cur_episode += 1
 
-        if self.cur_episode % self.rank_update_interval == 0:
-            self.rank += 1
-
         return np.asarray(state), {"status": self.status}
 
     def reset_model(self):
@@ -266,12 +262,12 @@ class Env(gym.Env):
         state_msg.pose.orientation.z = 0
         state_msg.pose.orientation.w = 1.
 
-        # modify target cricket ball position
-        target = ModelState()
-        target.model_name = 'target_red_0'
-        target.pose.position.x = self.goal_x
-        target.pose.position.y = self.goal_y
-        target.pose.position.z = 0.
+        # # modify target cricket ball position
+        # target = ModelState()
+        # target.model_name = 'target_red_0'
+        # target.pose.position.x = self.goal_x
+        # target.pose.position.y = self.goal_y
+        # target.pose.position.z = 0.
         # target.pose.position.x = 0.
         # target.pose.position.y = 0.
 
@@ -279,7 +275,7 @@ class Env(gym.Env):
         try:
             set_state = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
             set_state( state_msg )
-            set_state( target )
+            # set_state( target )
 
         except (rospy.ServiceException) as e:
             print("gazebo/set_model_state Service call failed")

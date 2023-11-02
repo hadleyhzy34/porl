@@ -57,8 +57,8 @@ class POR(nn.Module):
         # Update goal policy
         v = self.vf(observations)
         adv = target_v - v
-        # weight = torch.exp(self.alpha * adv)
-        weight = torch.exp(adv / self.alpha)
+        weight = torch.exp(self.alpha * adv)
+        # weight = torch.exp(adv / self.alpha)
         weight = torch.clamp_max(weight, EXP_ADV_MAX).detach()
         goal_out = self.goal_policy(observations)
         g_loss = -goal_out.log_prob(next_observations)

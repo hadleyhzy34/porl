@@ -1,26 +1,28 @@
+from platform import node
 import rospy
 import random
-import csv
 import argparse
 import numpy as np
 import pdb
-from std_msgs.msg import Float32MultiArray
 import torch
 import torch.nn as nn
 # from env.env import Env
 from env.gazebo import Env
-from torch.utils.tensorboard import SummaryWriter
-import string
-import pandas as pd
+import torch.multiprocessing as mp
+from multiprocessing import Lock
+from concurrent.futures import process
 
-def collect(args):
+def collect(namespace, rank, args):
     # pdb.set_trace()
-    rospy.init_node(args.namespace)
+    node_name = f"{namespace}_{rank}"
+    rospy.init_node(node_name)
 
     EPISODES = args.episodes
 
-    env = Env(args.state_size,
-              args.action_size)
+    env = Env(namespace,
+              args.state_size,
+              args.action_size,
+              rank)
 
     action_bound = np.array([0.15/2,1.5])
 
@@ -34,16 +36,12 @@ def collect(args):
         score = 0
         for t in range(args.episode_step):
             action = (np.random.random((2,)) * 2 + np.array([0,-1.])) * action_bound
-            # pdb.set_trace()
 
             # execute actions and wait until next scan(state)
             next_state, reward, done, truncated, info = env.collect_step(action)
 
             score += reward
             state = next_state
-
-            # if t == args.episode_step-1:
-            #     truncated = True
 
             data = {'state': state,
                     'next_state': next_state,
@@ -53,12 +51,9 @@ def collect(args):
 
             total_data.append(data)
             if len(total_data) == 100:
-                torch.save(total_data,f'checkpoint/dataset_{file_index}.pt')
+                torch.save(total_data,f'checkpoint/dataset_{rank}_{file_index}.pt')
                 total_data = []
                 file_index += 1
-
-            # randomly set rank number
-            env.rank = random.randint(0,15) 
 
             if done:
                 break
@@ -75,5 +70,15 @@ if __name__ == '__main__':
     parser.add_argument('--episode_step', type=int, default=500)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--update_step', type=int, default=500)
+    parser.add_argument('--num_processes', type=int, default=4)
     args = parser.parse_args()
-    collect(args)
+
+    # rospy.init_node('collect')
+    processes = []
+    for rank in range(args.num_processes):
+        p = mp.Process(target=collect, args=(args.namespace+'_'+str(rank), rank, args,))
+        p.start()
+        processes.append(p)
+
+    for p in processes:
+        p.join()
