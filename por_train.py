@@ -23,9 +23,9 @@ def train(args):
     if torch.cuda.is_available():
         device = torch.device(args.device)
 
-    #summary writer session name
-    res = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
-    writer = SummaryWriter(f'./log/{res}')
+    # #summary writer session name
+    # res = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
+    # writer = SummaryWriter(f'./log/{res}')
 
     state_size = args.state_size
     action_size = args.action_size
@@ -87,18 +87,19 @@ def train(args):
                                  f"g_loss: {statistics.fmean(e_g_loss):.4f} "
                     )
 
-            writer.add_scalar('v_loss',v_loss, steps)
-            writer.add_scalar('g_loss',g_loss, steps)
+            # writer.add_scalar('v_loss',v_loss, steps)
+            # writer.add_scalar('g_loss',g_loss, steps)
             steps += 1
 
         # evaluate policy every 10 episodes
         if (i+1) % 10 == 0:
-            mean_stp_length, mean_rew, mean_success_rate = evaluate_policy(agent,args)
-            print(f"episodes: {i}||"
-                  f"mean_step_length: {mean_stp_length}||"
-                  f"mean_reward: {mean_rew}||"
-                  f"mean_success_rate: {mean_success_rate}"
-                  )
+            torch.save(agent.state_dict(), f"weights/model_{i}.pt")
+            # mean_stp_length, mean_rew, mean_success_rate = evaluate_policy(agent,args)
+            # print(f"episodes: {i}||"
+            #       f"mean_step_length: {mean_stp_length}||"
+            #       f"mean_reward: {mean_rew}||"
+            #       f"mean_success_rate: {mean_success_rate}"
+            #       )
 
         # t = time.localtime()
         # current_time = time.strftime("%H_%M_%S", t)
