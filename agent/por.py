@@ -6,7 +6,8 @@ import torch.nn.functional as F
 from torch.optim.lr_scheduler import CosineAnnealingLR
 import pdb
 from util.util import compute_batched, update_exponential_moving_average
-
+from agent.policy import GaussianPolicy
+from agent.value_functions import TwinV
 
 EXP_ADV_MAX = 100.
 
@@ -17,14 +18,46 @@ def asymmetric_l2_loss(u, tau):
 
 
 class POR(nn.Module):
-    def __init__(self, vf, goal_policy, max_steps,
-                 tau, alpha, device=torch.device('cpu'), value_lr=1e-4, policy_lr=1e-4, discount=0.99, beta=0.005):
+    def __init__(self,
+                 args,
+                 max_steps,
+                 tau,
+                 alpha,
+                 backbone = None,
+                 device=torch.device('cpu'),
+                 value_lr=1e-4,
+                 policy_lr=1e-4,
+                 discount=0.99,
+                 beta=0.005):
         super().__init__()
         self.device = device
-        self.vf = vf.to(device)
-        self.v_target = copy.deepcopy(vf).requires_grad_(False).to(device)
+        self.backbone = backbone
+        if self.backbone is None:
+            self.goal_policy = GaussianPolicy(args.state_size,
+                                              args.state_size,
+                                              hidden_dim=args.hidden_dim,
+                                              n_hidden=args.n_hidden).to(self.device)
+
+            # state value function
+            self.vf = TwinV(args.state_size,
+                            layer_norm=args.layer_norm,
+                            hidden_dim=args.hidden_dim,
+                            n_hidden=args.n_hidden).to(self.device)
+        else:
+            self.backbone = self.backbone.to(device)
+            self.goal_policy = GaussianPolicy(args.feature_dim,
+                                              args.state_size,
+                                              hidden_dim=args.hidden_dim,
+                                              n_hidden=args.n_hidden).to(self.device)
+
+            # state value function
+            self.vf = TwinV(args.feature_dim,
+                            layer_norm=args.layer_norm,
+                            hidden_dim=args.hidden_dim,
+                            n_hidden=args.n_hidden).to(self.device)
+
+        self.v_target = copy.deepcopy(self.vf).requires_grad_(False).to(device)
         # self.policy = policy.to(DEFAULT_DEVICE)
-        self.goal_policy = goal_policy.to(device)
         self.v_optimizer = torch.optim.Adam(self.vf.parameters(), lr=value_lr)
         # self.policy_optimizer = torch.optim.Adam(self.policy.parameters(), lr=policy_lr)
         # self.policy_lr_schedule = CosineAnnealingLR(self.policy_optimizer, max_steps)
@@ -39,9 +72,14 @@ class POR(nn.Module):
 
     def por_residual_update(self, observations, next_observations, rewards, terminals):
         # pdb.set_trace()
-        # the network will NOT update
-        with torch.no_grad():
-            next_v = self.v_target(next_observations)  #(b,)
+        if self.backbone is not None:
+            observations = self.backbone(observations)
+            next_observations_feat = self.backbone(next_observations)
+            with torch.no_grad():
+                next_v = self.v_target(next_observations_feat)  #(b,)
+        else:
+            with torch.no_grad():
+                next_v = self.v_target(next_observations)  #(b,)
 
         # Update value function
         target_v = rewards + (1. - terminals.float()) * self.discount * next_v
@@ -56,12 +94,12 @@ class POR(nn.Module):
 
         # Update goal policy
         # pdb.set_trace()
-        v = self.vf(observations)
+        v = self.vf(observations.detach())
         adv = target_v - v
         # weight = torch.exp(self.alpha * adv)
         weight = torch.exp(adv / self.alpha)
         weight = torch.clamp_max(weight, EXP_ADV_MAX).detach()
-        goal_out = self.goal_policy(observations)
+        goal_out = self.goal_policy(observations.detach())
         g_loss = -goal_out.log_prob(next_observations)
         if g_loss.min() <= 0:
             pdb.set_trace()

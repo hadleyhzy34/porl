@@ -3,6 +3,7 @@ import random
 import string
 import numpy as np
 from torch.utils.data import DataLoader, Dataset
+from agent.fasternet import FasterNet
 from agent.value_functions import TwinV
 from dataloader.dataloader import CustomDataset
 import pdb
@@ -29,29 +30,30 @@ def train(args):
     state_size = args.state_size
     action_size = args.action_size
 
+    backbone = FasterNet(3,args.feature_dim)
+
     # policy = GaussianPolicy(obs_dim + obs_dim, act_dim, hidden_dim=1024, n_hidden=2)
     # policy to predict next state
-    goal_policy = GaussianPolicy(state_size,
-                                 state_size,
-                                 hidden_dim=args.hidden_dim,
-                                 n_hidden=args.n_hidden)
+    # goal_policy = GaussianPolicy(state_size,
+    #                              state_size,
+    #                              hidden_dim=args.hidden_dim,
+    #                              n_hidden=args.n_hidden)
+    #
+    # # state value function
+    # vf = TwinV(state_size,
+    #            layer_norm=args.layer_norm,
+    #            hidden_dim=args.hidden_dim,
+    #            n_hidden=args.n_hidden)
 
-    # state value function
-    vf = TwinV(state_size,
-               layer_norm=args.layer_norm,
-               hidden_dim=args.hidden_dim,
-               n_hidden=args.n_hidden)
-
-    agent = POR(
-        vf=vf,
-        goal_policy=goal_policy,
-        max_steps=args.train_steps,
-        tau=args.tau,
-        alpha=args.alpha,
-        discount=args.discount,
-        value_lr=args.value_lr,
-        policy_lr=args.policy_lr,
-        device=device
+    agent = POR(args,
+                backbone=backbone,
+                max_steps=args.train_steps,
+                tau=args.tau,
+                alpha=args.alpha,
+                discount=args.discount,
+                value_lr=args.value_lr,
+                policy_lr=args.policy_lr,
+                device=device
     )
 
     data = CustomDataset(device = device)
@@ -124,7 +126,7 @@ if __name__ == '__main__':
     parser.add_argument('--action_size', type=int, default=2)
     parser.add_argument('--episodes', type=int, default=5000)
     parser.add_argument('--device', type=str, default='cuda')
-    parser.add_argument('--batch_size', type=int, default=256)
+    parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--replay_buffer_size', type=int, default=10_000)
     parser.add_argument('--episode_step', type=int, default=500)
     parser.add_argument('--lr', type=float, default=0.001)
@@ -137,6 +139,7 @@ if __name__ == '__main__':
     parser.add_argument("--normalize", action='store_true')
     parser.add_argument("--layer_norm", action='store_true')
     parser.add_argument("--train_steps", type=int, default=1_000)
+    parser.add_argument("--feature_dim", type=int, default=256)
 
     parser.add_argument('--discount', type=float, default=0.99)
     parser.add_argument('--tau', type=float, default=0.9)

@@ -127,6 +127,53 @@ class SORL(nn.Module):
 
         return v_loss.item(), g_loss.item()
 
+    def vf_update(self, observations, actions, rewards, next_observations, terminals):
+        # pdb.set_trace()
+        # obtain latent feature
+        if self.backbone is not None:
+            observations = self.backbone(observations)
+            next_observations = self.backbone(next_observations)
+
+        # the network will NOT update
+        with torch.no_grad():
+            next_v = self.v_tgt(next_observations)  #(b,)
+
+        # Update value function
+        target_v = rewards + (1. - terminals.float()) * self.discount * next_v
+        vs = self.v_net.both(observations)
+        v_loss = sum(asymmetric_l2_loss(target_v - v, self.tau) for v in vs) / len(vs)
+        self.v_optimizer.zero_grad(set_to_none=True)
+        v_loss.backward()
+        self.v_optimizer.step()
+
+        # Update target V network
+        update_exponential_moving_average(self.v_tgt, self.v_net, self.beta)
+
+        return v_loss.item()
+
+    def policy_update(self, observations, actions, rewards, next_observations, terminals):
+        # pdb.set_trace()
+        # obtain latent feature
+        if self.backbone is not None:
+            observations = self.backbone(observations)
+            next_observations = self.backbone(next_observations)
+
+        # pdb.set_trace()
+        v = self.v_net(observations)
+        adv = target_v - v
+        weight = torch.exp(self.alpha * adv)
+        # weight = torch.exp(adv / self.alpha)
+        weight = torch.clamp_max(weight, EXP_ADV_MAX).detach()
+        action_distri = self.policy(observations.detach())
+        g_loss = -action_distri.log_prob(actions)
+        g_loss = torch.mean(weight * g_loss)
+        self.policy_optimizer.zero_grad(set_to_none=True)
+        g_loss.backward()
+        self.policy_optimizer.step()
+        self.lr_schedule.step()
+
+        return g_loss.item()
+
     def pretrain_init(self, b_goal_policy):
         self.b_goal_policy = b_goal_policy.to(DEFAULT_DEVICE)
         self.b_goal_policy_optimizer = torch.optim.Adam(self.b_goal_policy.parameters(), lr=0.0001)
