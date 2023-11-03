@@ -153,12 +153,9 @@ class Env(gym.Env):
             action: (2,)
         return:
         '''
-        max_angular_vel = 1.5
-        ang_vel = ((self.action_size - 1)/2 - action) * max_angular_vel * 0.5
-
         vel_cmd = Twist()
-        vel_cmd.linear.x = 0.15
-        vel_cmd.angular.z = ang_vel
+        vel_cmd.linear.x = action[0]
+        vel_cmd.angular.z = action[1]
         self.pub_cmd_vel.publish(vel_cmd)
 
         # waiting more or less equal to 0.2 s until scan data received, stable behavior
@@ -262,12 +259,12 @@ class Env(gym.Env):
         state_msg.pose.orientation.z = 0
         state_msg.pose.orientation.w = 1.
 
-        # # modify target cricket ball position
-        # target = ModelState()
-        # target.model_name = 'target_red_0'
-        # target.pose.position.x = self.goal_x
-        # target.pose.position.y = self.goal_y
-        # target.pose.position.z = 0.
+        # modify target cricket ball position
+        target = ModelState()
+        target.model_name = 'target_red_0'
+        target.pose.position.x = self.goal_x
+        target.pose.position.y = self.goal_y
+        target.pose.position.z = 0.
         # target.pose.position.x = 0.
         # target.pose.position.y = 0.
 
@@ -275,7 +272,7 @@ class Env(gym.Env):
         try:
             set_state = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
             set_state( state_msg )
-            # set_state( target )
+            set_state( target )
 
         except (rospy.ServiceException) as e:
             print("gazebo/set_model_state Service call failed")

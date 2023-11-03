@@ -1,5 +1,8 @@
 import rospy
+import numpy as np
+import pdb
 import statistics
+import torch
 from env.gazebo import Env
 
 def evaluate_policy(agent, args):
@@ -13,13 +16,21 @@ def evaluate_policy(agent, args):
     success = []
     steps = []
 
+    action_bound = np.array([0.15/2,1.5])
+
     for e in range(EPISODES):
         done = False
-        state = env.reset()
+        state, _ = env.reset()
 
         score = 0
-        for t in range(agent.episode_step):
-            action = agent.select_action(state)
+        for t in range(args.episode_step):
+            # pdb.set_trace()
+            state = torch.from_numpy(state).to(torch.float).to(args.device)
+            action = agent.select_action(state[None,:])[0]
+            action = (action + np.array([1.,0.])) * action_bound
+
+            assert action[0] >= 0 and action[0] <= 0.15, f"linear velocity is not in range: {action[0]}"
+            assert action[1] >= -1.5 and action[1] <= 1.5, f"angular velocity is not in range: {action[1]}"
 
             # execute actions and wait until next scan(state)
             next_state, reward, done, truncated, info = env.step(action)
@@ -27,7 +38,7 @@ def evaluate_policy(agent, args):
             score += reward
             state = next_state
 
-            if t == agent.episode_step - 1:
+            if t == args.episode_step - 1:
                 done = True
 
             if done:

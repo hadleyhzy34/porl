@@ -1,5 +1,4 @@
 import copy
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -7,7 +6,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 import pdb
 from util.util import compute_batched, update_exponential_moving_average
 from agent.value_functions import TwinV
-from agent.policy import GaussianPolicy
+from agent.policy import GaussianPolicy, BoundedGaussianPolicy
 
 
 EXP_ADV_MAX = 100.
@@ -40,7 +39,7 @@ class SORL(nn.Module):
                                hidden_dim=args.hidden_dim,
                                n_hidden=args.n_hidden).to(device)
 
-            self.policy = GaussianPolicy(args.state_size,
+            self.policy = BoundedGaussianPolicy(args.state_size,
                                          args.action_size,
                                          hidden_dim=args.hidden_dim,
                                          n_hidden=args.n_hidden).to(device)
@@ -51,7 +50,7 @@ class SORL(nn.Module):
                                hidden_dim=args.hidden_dim,
                                n_hidden=args.n_hidden).to(device)
 
-            self.policy = GaussianPolicy(args.feature_dim,
+            self.policy = BoundedGaussianPolicy(args.feature_dim,
                                          args.action_size,
                                          hidden_dim=args.hidden_dim,
                                          n_hidden=args.n_hidden).to(device)
@@ -70,7 +69,10 @@ class SORL(nn.Module):
         self.beta = beta
 
     def select_action(self, observations):
-        action_distri = self.policy(observations)
+        with torch.no_grad():
+            if self.backbone is not None:
+                observations = self.backbone(observations)
+            action_distri = self.policy(observations)
         return action_distri.mean.cpu().numpy()
 
     def update(self, observations, actions, rewards, next_observations, terminals):
@@ -78,7 +80,7 @@ class SORL(nn.Module):
         # obtain latent feature
         if self.backbone is not None:
             observations = self.backbone(observations)
-            next_observations = self.backbone(observations)
+            next_observations = self.backbone(next_observations)
 
         # the network will NOT update
         with torch.no_grad():
@@ -96,6 +98,7 @@ class SORL(nn.Module):
         update_exponential_moving_average(self.v_tgt, self.v_net, self.beta)
 
         # Update policy
+        # pdb.set_trace()
         v = self.v_net(observations)
         adv = target_v - v
         weight = torch.exp(self.alpha * adv)
@@ -108,6 +111,19 @@ class SORL(nn.Module):
         g_loss.backward()
         self.policy_optimizer.step()
         self.lr_schedule.step()
+
+        # # Update policy
+        # v = self.v_net(observations)
+        # adv = target_v - v
+        # weight = torch.exp(self.alpha * adv)
+        # # weight = torch.exp(adv / self.alpha)
+        # weight = torch.clamp_max(weight, EXP_ADV_MAX).detach()
+        # learned_actions = self.policy(observations.detach())
+        # g_loss = torch.mean(weight / torch.linalg.norm(learned_actions - actions, dim=-1))
+        # self.policy_optimizer.zero_grad(set_to_none=True)
+        # g_loss.backward()
+        # self.policy_optimizer.step()
+        # self.lr_schedule.step()
 
         return v_loss.item(), g_loss.item()
 

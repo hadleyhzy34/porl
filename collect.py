@@ -31,7 +31,7 @@ def collect(namespace, rank, args):
 
     for e in range(EPISODES):
         done = False
-        state = env.reset()
+        state, _ = env.reset()
 
         score = 0
         for t in range(args.episode_step):

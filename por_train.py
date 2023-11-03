@@ -14,6 +14,7 @@ import argparse
 from agent.policy import GaussianPolicy
 from agent.por import POR
 from torch.utils.tensorboard import SummaryWriter
+from test import evaluate_policy
 
 def train(args):
     torch.autograd.set_detect_anomaly(True)
@@ -88,14 +89,14 @@ def train(args):
             writer.add_scalar('g_loss',g_loss, steps)
             steps += 1
 
-        # # evaluate policy every 10 episodes
-        # if (i+1) % 10 == 0:
-        #     mean_stp_length, mean_rew, mean_success_rate = evaluate_policy(agent)
-        #     print(f"episodes: {i}||"
-        #           f"mean_step_length: {mean_stp_length}||"
-        #           f"mean_reward: {mean_rew}||"
-        #           f"mean_success_rate: {mean_success_rate}"
-        #           )
+        # evaluate policy every 10 episodes
+        if (i+1) % 10 == 0:
+            mean_stp_length, mean_rew, mean_success_rate = evaluate_policy(agent,args)
+            print(f"episodes: {i}||"
+                  f"mean_step_length: {mean_stp_length}||"
+                  f"mean_reward: {mean_rew}||"
+                  f"mean_success_rate: {mean_success_rate}"
+                  )
 
         # t = time.localtime()
         # current_time = time.strftime("%H_%M_%S", t)

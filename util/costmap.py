@@ -24,6 +24,8 @@ def state2costmap(state):
     costmap = torch.zeros((b,360,256,3)).to(state.device)
     idx = (state[:,:360]/dist_increment).to(torch.long)  #(b,360)
     idx = torch.roll(idx,180,1)  #(b,360)
+
+    # pdb.set_trace()
     costmap[:,:,:,0] = torch.zeros((b,360,256),device=state.device).scatter_(2,idx[:,:,None],1.)
     costmap[:,:,0,0] = 0.
 
@@ -31,11 +33,21 @@ def state2costmap(state):
     deg = torch.atan2(state[:,-1],state[:,-2])  #(b,)
     deg = torch.clamp(deg, min=-torch.pi+(2*np.pi+2e-4)/360, max=torch.pi-(2*np.pi+2e-4)/360)
     deg = ((deg + torch.pi)/ angle_increment).to(torch.long)  #(b,)
+
+    # pdb.set_trace()
+    # if deg.max() >= 360 or deg.min() < 0:
+    #     pdb.set_trace()
+
+    # assert deg.max() < 360 and deg.min() >= 0, f"deg range is not correct: {deg.min()},{deg.max()}"
     # deg = int(deg / angle_increment)
     cur_dist=torch.linalg.norm(state[:,-2:],dim=-1)  #(b,)
     # make sure cur_dist is withing range of 4 meters
     cur_dist = torch.clamp(cur_dist, max=4-4./256)
     dist = (cur_dist / dist_increment).to(torch.long)
+
+    # if dist.max() >=256 or dist.min() < 0:
+    #     pdb.set_trace()
+    # assert dist.max() < 256 and dist.min() >= 0, f"dist range is not correct: {dist.min()},{dist.max()}"
 
     dist_range=torch.cat([(dist-1)[:,None],dist[:,None],(dist+1)[:,None]],dim=-1)  #(b,3)
     deg_range=torch.cat([(deg-1)[:,None],deg[:,None],(deg+1)[:,None]],dim=-1)  #(b,3)

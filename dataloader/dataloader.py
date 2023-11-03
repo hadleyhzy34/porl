@@ -15,15 +15,19 @@ class CustomDataset(Dataset):
         # pdb.set_trace()
         file_index = index // 100
         row_index = index % 100
-        data = torch.load(f'checkpoint/dataset_{file_index}.pt')[row_index]
+        data = np.loadtxt(f"checkpoint/dataset_{file_index}.csv", delimiter=',',dtype=float)
+        # data = torch.load(f'checkpoint/dataset_{file_index}.pt')[row_index]
+        if data.max() < 0.1 or data.shape[0] != 72800:
+            pdb.set_trace()
+        data = data.reshape(100,-1)[row_index]
 
-        data = np.concatenate([
-            data['state'],
-            [data['reward']],
-            data['next_state'],
-            [data['done']],
-            data['action']
-            ])
+        # data = np.concatenate([
+        #     data['state'],
+        #     [data['reward']],
+        #     data['next_state'],
+        #     [data['done']],
+        #     data['action']
+        #     ])
         data = torch.from_numpy(data.astype(np.float32)).to(self.device)
 
         return data

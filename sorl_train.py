@@ -29,6 +29,7 @@ def train(args):
     backbone = FasterNet(3,args.feature_dim)
 
     agent = SORL(args,
+                 backbone=backbone,
                  max_steps=args.train_steps,
                  tau=args.tau,
                  alpha=args.alpha,
@@ -69,22 +70,25 @@ def train(args):
                     )
 
         # evaluate policy every 10 episodes
-        if (i+1) % 10 == 0:
+        if args.evaluate is True and (i+1) % 2 == 0:
             torch.save(agent.state_dict(), f'weights/model_{i}.pt')
-            # mean_stp_length, mean_rew, mean_success_rate = evaluate_policy(agent, args)
-            # print(f"episodes: {i}||"
-            #       f"mean_step_length: {mean_stp_length}||"
-            #       f"mean_reward: {mean_rew}||"
-            #       f"mean_success_rate: {mean_success_rate}"
-            #       )
+            mean_stp_length, mean_rew, mean_success_rate = evaluate_policy(agent, args)
+            print(f"eval_step: {i}||"
+                  f"mean_step_length: {mean_stp_length}||"
+                  f"mean_reward: {mean_rew}||"
+                  f"mean_success_rate: {mean_success_rate}"
+                  )
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--namespace', type=str, default='tb3')
     parser.add_argument('--state_size', type=int, default=362)
+    parser.add_argument('--test_episodes', type=int, default=10)
+    parser.add_argument('--episode_step', type=int, default=500)
     parser.add_argument('--action_size', type=int, default=2)
     parser.add_argument('--episodes', type=int, default=5000)
     parser.add_argument('--device', type=str, default='cuda')
-    parser.add_argument('--batch_size', type=int, default=128)
+    parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--hidden_dim', type=int, default=512)
     parser.add_argument('--n_hidden', type=int, default=2)
@@ -97,5 +101,6 @@ if __name__ == '__main__':
     parser.add_argument('--value_lr', type=float, default=1e-4)
     parser.add_argument('--policy_lr', type=float, default=1e-4)
     parser.add_argument('--alpha', type=float, default=10.0)
+    parser.add_argument('--evaluate', action="store_true")
     args = parser.parse_args()
     train(args)
