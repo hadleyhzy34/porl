@@ -23,14 +23,14 @@ def train(args):
     if torch.cuda.is_available():
         device = torch.device(args.device)
 
-    # #summary writer session name
-    # res = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
-    # writer = SummaryWriter(f'./log/{res}')
+    #summary writer session name
+    res = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
+    writer = SummaryWriter(f'./log/{res}')
 
     state_size = args.state_size
     action_size = args.action_size
 
-    backbone = FasterNet(3,args.feature_dim)
+    # backbone = FasterNet(3,args.feature_dim)
 
     # policy = GaussianPolicy(obs_dim + obs_dim, act_dim, hidden_dim=1024, n_hidden=2)
     # policy to predict next state
@@ -46,7 +46,7 @@ def train(args):
     #            n_hidden=args.n_hidden)
 
     agent = POR(args,
-                backbone=backbone,
+                # backbone=backbone,
                 max_steps=args.train_steps,
                 tau=args.tau,
                 alpha=args.alpha,
@@ -71,10 +71,11 @@ def train(args):
         for data in (pbar := tqdm(train_dataloader)):
             # pdb.set_trace()
             # s,r,s',d,a
-            observations = data[:,:362]
-            rewards = data[:,362]
-            next_observations = data[:,363:-3]
-            dones = data[:,-3]
+            observations = data[:,:state_size]
+            rewards = data[:,state_size]
+            next_observations = data[:,state_size+1:-action_size-1]
+            dones = data[:,-action_size-1]
+            actions = data[:,-action_size:]
             v_loss, g_loss = agent.por_residual_update(observations,
                                                        next_observations,
                                                        rewards,
@@ -87,19 +88,19 @@ def train(args):
                                  f"g_loss: {statistics.fmean(e_g_loss):.4f} "
                     )
 
-            # writer.add_scalar('v_loss',v_loss, steps)
-            # writer.add_scalar('g_loss',g_loss, steps)
+            writer.add_scalar('v_loss',v_loss, steps)
+            writer.add_scalar('g_loss',g_loss, steps)
             steps += 1
 
         # evaluate policy every 10 episodes
-        if (i+1) % 10 == 0:
+        if (i+1) % 25 == 0:
             torch.save(agent.state_dict(), f"weights/model_{i}.pt")
-            # mean_stp_length, mean_rew, mean_success_rate = evaluate_policy(agent,args)
-            # print(f"episodes: {i}||"
-            #       f"mean_step_length: {mean_stp_length}||"
-            #       f"mean_reward: {mean_rew}||"
-            #       f"mean_success_rate: {mean_success_rate}"
-            #       )
+            mean_stp_length, mean_rew, mean_success_rate = evaluate_policy(agent,args)
+            print(f"episodes: {i}||"
+                  f"mean_step_length: {mean_stp_length}||"
+                  f"mean_reward: {mean_rew}||"
+                  f"mean_success_rate: {mean_success_rate}"
+                  )
 
         # t = time.localtime()
         # current_time = time.strftime("%H_%M_%S", t)
@@ -123,7 +124,7 @@ def train(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--namespace', type=str, default='tb3')
-    parser.add_argument('--state_size', type=int, default=362)
+    parser.add_argument('--state_size', type=int, default=365)
     parser.add_argument('--action_size', type=int, default=2)
     parser.add_argument('--episodes', type=int, default=5000)
     parser.add_argument('--device', type=str, default='cuda')
