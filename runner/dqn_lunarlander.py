@@ -147,7 +147,7 @@ def runner():
 
     # Initialize the replay buffer
     buffer_capacity = 100000  # Larger capacity for longer episodes
-    batch_size = 64
+    batch_size = 128
     replay_buffer = ReplayBuffer(buffer_capacity, (state_size,), device)
 
     # Create the Q-network and target network
