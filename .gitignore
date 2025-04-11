@@ -9,6 +9,7 @@ __pycache__/
 checkpoint*
 weights/
 log/
+logs/
 checkpoint/
 # Distribution / packaging
 .Python
