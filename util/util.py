@@ -18,12 +18,12 @@ import torch.nn as nn
 
 
 class Squeeze(nn.Module):
-    def __init__(self, dim=None):
+    def __init__(agent, dim=None):
         super().__init__()
-        self.dim = dim
+        agent.dim = dim
 
-    def forward(self, x):
-        return x.squeeze(dim=self.dim)
+    def forward(agent, x):
+        return x.squeeze(dim=agent.dim)
 
 
 def mlp(dims, activation=nn.ReLU, output_activation=None, layer_norm=False, squeeze_output=False):
@@ -239,43 +239,43 @@ def generate_test_generlaization_data(dataset, env_name, env_idx = None):
 
 
 class Log:
-    def __init__(self, root_log_dir, cfg_dict,
+    def __init__(agent, root_log_dir, cfg_dict,
                  txt_filename='log.txt',
                  csv_filename='progress.csv',
                  cfg_filename='config.json',
                  flush=True):
-        self.dir = Path(root_log_dir)/_gen_dir_name()
-        self.dir.mkdir(parents=True)
-        self.txt_file = open(self.dir/txt_filename, 'w')
-        self.csv_file = None
-        (self.dir/cfg_filename).write_text(json.dumps(cfg_dict))
-        self.txt_filename = txt_filename
-        self.csv_filename = csv_filename
-        self.cfg_filename = cfg_filename
-        self.flush = flush
+        agent.dir = Path(root_log_dir)/_gen_dir_name()
+        agent.dir.mkdir(parents=True)
+        agent.txt_file = open(agent.dir/txt_filename, 'w')
+        agent.csv_file = None
+        (agent.dir/cfg_filename).write_text(json.dumps(cfg_dict))
+        agent.txt_filename = txt_filename
+        agent.csv_filename = csv_filename
+        agent.cfg_filename = cfg_filename
+        agent.flush = flush
 
-    def write(self, message, end='\n'):
+    def write(agent, message, end='\n'):
         now_str = datetime.now().strftime('%H:%M:%S')
         message = f'[{now_str}] ' + message
-        for f in [sys.stdout, self.txt_file]:
-            print(message, end=end, file=f, flush=self.flush)
+        for f in [sys.stdout, agent.txt_file]:
+            print(message, end=end, file=f, flush=agent.flush)
 
-    def __call__(self, *args, **kwargs):
-        self.write(*args, **kwargs)
+    def __call__(agent, *args, **kwargs):
+        agent.write(*args, **kwargs)
 
-    def row(self, dict):
-        if self.csv_file is None:
-            self.csv_file = open(self.dir/self.csv_filename, 'w', newline='')
-            self.csv_writer = csv.DictWriter(self.csv_file, list(dict.keys()))
-            self.csv_writer.writeheader()
+    def row(agent, dict):
+        if agent.csv_file is None:
+            agent.csv_file = open(agent.dir/agent.csv_filename, 'w', newline='')
+            agent.csv_writer = csv.DictWriter(agent.csv_file, list(dict.keys()))
+            agent.csv_writer.writeheader()
 
-        self(str(dict))
-        self.csv_writer.writerow(dict)
-        if self.flush:
-            self.csv_file.flush()
+        agent(str(dict))
+        agent.csv_writer.writerow(dict)
+        if agent.flush:
+            agent.csv_file.flush()
 
-    def close(self):
-        self.txt_file.close()
-        if self.csv_file is not None:
-            self.csv_file.close()
+    def close(agent):
+        agent.txt_file.close()
+        if agent.csv_file is not None:
+            agent.csv_file.close()
 

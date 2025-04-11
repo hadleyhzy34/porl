@@ -5,13 +5,13 @@ import os
 import pdb
 
 class CustomDataset(Dataset):
-    def __init__(self, device=torch.device('cpu')):
-        self.device = device
+    def __init__(agent, device=torch.device('cpu')):
+        agent.device = device
 
         list = os.listdir('checkpoint/')
-        self.length = len(list) * 100
+        agent.length = len(list) * 100
 
-    def __getitem__(self, index):
+    def __getitem__(agent, index):
         # pdb.set_trace()
         file_index = index // 100
         row_index = index % 100
@@ -28,9 +28,9 @@ class CustomDataset(Dataset):
         #     [data['done']],
         #     data['action']
         #     ])
-        data = torch.from_numpy(data.astype(np.float32)).to(self.device)
+        data = torch.from_numpy(data.astype(np.float32)).to(agent.device)
 
         return data
 
-    def __len__(self):
-        return self.length
+    def __len__(agent):
+        return agent.length

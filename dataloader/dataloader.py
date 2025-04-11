@@ -8,16 +8,16 @@ from matplotlib import pyplot as plt
 
 
 class CustomDataset(Dataset):
-    def __init__(self, device=torch.device('cpu')):
-        self.device = device
-        self.data_length = 365 + 1 + 365 + 1 + 2
+    def __init__(agent, device=torch.device('cpu')):
+        agent.device = device
+        agent.data_length = 365 + 1 + 365 + 1 + 2
 
         cur_data = torch.zeros((100,361))
         count = 0
         file_count = 0
         for f in os.listdir('checkpoint/'):
             data = np.loadtxt(f, delimiter=',',dtype=float)
-            data = data.reshape(-1,self.data_length)
+            data = data.reshape(-1,agent.data_length)
             for j in range(data.shape[0]):
                 save_data = preprocessing(data[j])
                 if save_data is not None:
@@ -29,15 +29,15 @@ class CustomDataset(Dataset):
                         file_count += 1
                         cur_data = torch.zeros((100,361))
 
-        self.length = count
+        agent.length = count
 
-    def __getitem__(self, index):
+    def __getitem__(agent, index):
         pdb.set_trace()
         file_index = index // 100
         row_index = index % 100
         # data = np.loadtxt(f"checkpoint/dataset_{file_index}.csv", delimiter=',',dtype=float)
         data = torch.load(f'checkpoint/a_star/dataset_{file_index}.pt')[row_index]
-        data = data.reshape(-1,self.data_length)[row_index]
+        data = data.reshape(-1,agent.data_length)[row_index]
 
         # preprocessing(data)
         # data = np.concatenate([
@@ -47,12 +47,12 @@ class CustomDataset(Dataset):
         #     [data['done']],
         #     data['action']
         #     ])
-        data = torch.from_numpy(data.astype(np.float32)).to(self.device)
+        data = torch.from_numpy(data.astype(np.float32)).to(agent.device)
 
         return data
 
-    def __len__(self):
-        return self.length
+    def __len__(agent):
+        return agent.length
 
 
 # def preprocessing(data_dir, tgt_dir, file_list, length_list):

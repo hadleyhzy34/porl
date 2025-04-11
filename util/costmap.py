@@ -64,7 +64,7 @@ def state2costmap(state):
     return costmap.permute(0,3,1,2)
 
 class CostmapTestCase(unittest.TestCase):
-    def test_goal_bound_0(self):
+    def test_goal_bound_0(agent):
         state = torch.rand(1,362) * 3.5
         state[0,-2] = -4.
         state[0,-1] = 0.
@@ -79,7 +79,7 @@ class CostmapTestCase(unittest.TestCase):
             assert torch.eq(res[0,:,(i+180)%360,int(state[0,i]/dist_increment)],torch.tensor([1.,0.,0.]))[1]
             assert torch.eq(res[0,:,(i+180)%360,int(state[0,i]/dist_increment)],torch.tensor([1.,0.,0.]))[2]
 
-    def test_goal_bound_1(self):
+    def test_goal_bound_1(agent):
         state = torch.rand(1,362) * 4.
         state[0,-2] = -4.
         state[0,-1] = 1e-4
@@ -94,7 +94,7 @@ class CostmapTestCase(unittest.TestCase):
             assert torch.eq(res[0,:,(i+180)%360,int(state[0,i]/dist_increment)],torch.tensor([1.,0.,0.]))[1]
             assert torch.eq(res[0,:,(i+180)%360,int(state[0,i]/dist_increment)],torch.tensor([1.,0.,0.]))[2]
 
-    def test_goal_bound_2(self):
+    def test_goal_bound_2(agent):
         state = torch.rand(1,362) * 4.
         state[0,-2] = -4.
         state[0,-1] = -1e-4
@@ -109,7 +109,7 @@ class CostmapTestCase(unittest.TestCase):
             assert torch.eq(res[0,:,(i+180)%360,int(state[0,i]/dist_increment)],torch.tensor([1.,0.,0.]))[1]
             assert torch.eq(res[0,:,(i+180)%360,int(state[0,i]/dist_increment)],torch.tensor([1.,0.,0.]))[2]
 
-    def test_goal_bound_3(self):
+    def test_goal_bound_3(agent):
         state = torch.rand(1,362) * 4.
         state[0,-2] = 0.
         state[0,-1] = -4.
@@ -124,7 +124,7 @@ class CostmapTestCase(unittest.TestCase):
             assert torch.eq(res[0,:,(i+180)%360,int(state[0,i]/dist_increment)],torch.tensor([1.,0.,0.]))[1]
             assert torch.eq(res[0,:,(i+180)%360,int(state[0,i]/dist_increment)],torch.tensor([1.,0.,0.]))[2]
 
-    def test_goal_bound_4(self):
+    def test_goal_bound_4(agent):
         state = torch.rand(1,362) * 4.
         state[0,-2] = 0.
         state[0,-1] = 4.

@@ -18,7 +18,7 @@ def asymmetric_l2_loss(u, tau):
 
 
 class SORL(nn.Module):
-    def __init__(self,
+    def __init__(agent,
                  args,
                  max_steps,
                  tau,
@@ -30,181 +30,181 @@ class SORL(nn.Module):
                  discount=0.99,
                  beta=0.005):
         super().__init__()
-        self.device = device
-        self.backbone = backbone
+        agent.device = device
+        agent.backbone = backbone
 
-        if self.backbone is None:
-            self.v_net = TwinV(args.state_size,
+        if agent.backbone is None:
+            agent.v_net = TwinV(args.state_size,
                                layer_norm=args.layer_norm,
                                hidden_dim=args.hidden_dim,
                                n_hidden=args.n_hidden).to(device)
 
-            self.policy = BoundedGaussianPolicy(args.state_size,
+            agent.policy = BoundedGaussianPolicy(args.state_size,
                                          args.action_size,
                                          hidden_dim=args.hidden_dim,
                                          n_hidden=args.n_hidden).to(device)
         else:
-            self.backbone = self.backbone.to(device)
-            self.v_net = TwinV(args.feature_dim,
+            agent.backbone = agent.backbone.to(device)
+            agent.v_net = TwinV(args.feature_dim,
                                layer_norm=args.layer_norm,
                                hidden_dim=args.hidden_dim,
                                n_hidden=args.n_hidden).to(device)
 
-            self.policy = BoundedGaussianPolicy(args.feature_dim,
+            agent.policy = BoundedGaussianPolicy(args.feature_dim,
                                          args.action_size,
                                          hidden_dim=args.hidden_dim,
                                          n_hidden=args.n_hidden).to(device)
 
         # value function
-        self.v_tgt = copy.deepcopy(self.v_net).requires_grad_(False).to(device)
-        self.v_optimizer = torch.optim.Adam(self.v_net.parameters(), lr=value_lr)
+        agent.v_tgt = copy.deepcopy(agent.v_net).requires_grad_(False).to(device)
+        agent.v_optimizer = torch.optim.Adam(agent.v_net.parameters(), lr=value_lr)
 
         # agent policy
-        self.policy_optimizer = torch.optim.Adam(self.policy.parameters(), lr=policy_lr)
-        self.lr_schedule = CosineAnnealingLR(self.policy_optimizer, max_steps)
+        agent.policy_optimizer = torch.optim.Adam(agent.policy.parameters(), lr=policy_lr)
+        agent.lr_schedule = CosineAnnealingLR(agent.policy_optimizer, max_steps)
 
-        self.tau = tau
-        self.alpha = alpha
-        self.discount = discount
-        self.beta = beta
+        agent.tau = tau
+        agent.alpha = alpha
+        agent.discount = discount
+        agent.beta = beta
 
-    def select_action(self, observations):
+    def select_action(agent, observations):
         with torch.no_grad():
-            if self.backbone is not None:
-                observations = self.backbone(observations)
-            action_distri = self.policy(observations)
+            if agent.backbone is not None:
+                observations = agent.backbone(observations)
+            action_distri = agent.policy(observations)
         return action_distri.mean.cpu().numpy()
 
-    def update(self, observations, actions, rewards, next_observations, terminals):
+    def update(agent, observations, actions, rewards, next_observations, terminals):
         # pdb.set_trace()
         # obtain latent feature
-        if self.backbone is not None:
-            observations = self.backbone(observations)
-            next_observations = self.backbone(next_observations)
+        if agent.backbone is not None:
+            observations = agent.backbone(observations)
+            next_observations = agent.backbone(next_observations)
 
         # the network will NOT update
         with torch.no_grad():
-            next_v = self.v_tgt(next_observations)  #(b,)
+            next_v = agent.v_tgt(next_observations)  #(b,)
 
         # Update value function
-        target_v = rewards + (1. - terminals.float()) * self.discount * next_v
-        vs = self.v_net.both(observations)
-        v_loss = sum(asymmetric_l2_loss(target_v - v, self.tau) for v in vs) / len(vs)
-        self.v_optimizer.zero_grad(set_to_none=True)
+        target_v = rewards + (1. - terminals.float()) * agent.discount * next_v
+        vs = agent.v_net.both(observations)
+        v_loss = sum(asymmetric_l2_loss(target_v - v, agent.tau) for v in vs) / len(vs)
+        agent.v_optimizer.zero_grad(set_to_none=True)
         v_loss.backward()
-        self.v_optimizer.step()
+        agent.v_optimizer.step()
 
         # Update target V network
-        update_exponential_moving_average(self.v_tgt, self.v_net, self.beta)
+        update_exponential_moving_average(agent.v_tgt, agent.v_net, agent.beta)
 
         # Update policy
         # pdb.set_trace()
-        v = self.v_net(observations)
+        v = agent.v_net(observations)
         adv = target_v - v
-        weight = torch.exp(self.alpha * adv)
-        # weight = torch.exp(adv / self.alpha)
+        weight = torch.exp(agent.alpha * adv)
+        # weight = torch.exp(adv / agent.alpha)
         weight = torch.clamp_max(weight, EXP_ADV_MAX).detach()
-        action_distri = self.policy(observations.detach())
+        action_distri = agent.policy(observations.detach())
         g_loss = -action_distri.log_prob(actions)
         g_loss = torch.mean(weight * g_loss)
-        self.policy_optimizer.zero_grad(set_to_none=True)
+        agent.policy_optimizer.zero_grad(set_to_none=True)
         g_loss.backward()
-        self.policy_optimizer.step()
-        self.lr_schedule.step()
+        agent.policy_optimizer.step()
+        agent.lr_schedule.step()
 
         # # Update policy
-        # v = self.v_net(observations)
+        # v = agent.v_net(observations)
         # adv = target_v - v
-        # weight = torch.exp(self.alpha * adv)
-        # # weight = torch.exp(adv / self.alpha)
+        # weight = torch.exp(agent.alpha * adv)
+        # # weight = torch.exp(adv / agent.alpha)
         # weight = torch.clamp_max(weight, EXP_ADV_MAX).detach()
-        # learned_actions = self.policy(observations.detach())
+        # learned_actions = agent.policy(observations.detach())
         # g_loss = torch.mean(weight / torch.linalg.norm(learned_actions - actions, dim=-1))
-        # self.policy_optimizer.zero_grad(set_to_none=True)
+        # agent.policy_optimizer.zero_grad(set_to_none=True)
         # g_loss.backward()
-        # self.policy_optimizer.step()
-        # self.lr_schedule.step()
+        # agent.policy_optimizer.step()
+        # agent.lr_schedule.step()
 
         return v_loss.item(), g_loss.item()
 
-    def vf_update(self, observations, actions, rewards, next_observations, terminals):
+    def vf_update(agent, observations, actions, rewards, next_observations, terminals):
         # pdb.set_trace()
         # obtain latent feature
-        if self.backbone is not None:
-            observations = self.backbone(observations)
-            next_observations = self.backbone(next_observations)
+        if agent.backbone is not None:
+            observations = agent.backbone(observations)
+            next_observations = agent.backbone(next_observations)
 
         # the network will NOT update
         with torch.no_grad():
-            next_v = self.v_tgt(next_observations)  #(b,)
+            next_v = agent.v_tgt(next_observations)  #(b,)
 
         # Update value function
-        target_v = rewards + (1. - terminals.float()) * self.discount * next_v
-        vs = self.v_net.both(observations)
-        v_loss = sum(asymmetric_l2_loss(target_v - v, self.tau) for v in vs) / len(vs)
-        self.v_optimizer.zero_grad(set_to_none=True)
+        target_v = rewards + (1. - terminals.float()) * agent.discount * next_v
+        vs = agent.v_net.both(observations)
+        v_loss = sum(asymmetric_l2_loss(target_v - v, agent.tau) for v in vs) / len(vs)
+        agent.v_optimizer.zero_grad(set_to_none=True)
         v_loss.backward()
-        self.v_optimizer.step()
+        agent.v_optimizer.step()
 
         # Update target V network
-        update_exponential_moving_average(self.v_tgt, self.v_net, self.beta)
+        update_exponential_moving_average(agent.v_tgt, agent.v_net, agent.beta)
 
         return v_loss.item()
 
-    def policy_update(self, observations, actions, rewards, next_observations, terminals):
+    def policy_update(agent, observations, actions, rewards, next_observations, terminals):
         # pdb.set_trace()
         # obtain latent feature
-        if self.backbone is not None:
-            observations = self.backbone(observations)
-            next_observations = self.backbone(next_observations)
+        if agent.backbone is not None:
+            observations = agent.backbone(observations)
+            next_observations = agent.backbone(next_observations)
 
         # pdb.set_trace()
-        v = self.v_net(observations)
+        v = agent.v_net(observations)
         adv = target_v - v
-        weight = torch.exp(self.alpha * adv)
-        # weight = torch.exp(adv / self.alpha)
+        weight = torch.exp(agent.alpha * adv)
+        # weight = torch.exp(adv / agent.alpha)
         weight = torch.clamp_max(weight, EXP_ADV_MAX).detach()
-        action_distri = self.policy(observations.detach())
+        action_distri = agent.policy(observations.detach())
         g_loss = -action_distri.log_prob(actions)
         g_loss = torch.mean(weight * g_loss)
-        self.policy_optimizer.zero_grad(set_to_none=True)
+        agent.policy_optimizer.zero_grad(set_to_none=True)
         g_loss.backward()
-        self.policy_optimizer.step()
-        self.lr_schedule.step()
+        agent.policy_optimizer.step()
+        agent.lr_schedule.step()
 
         return g_loss.item()
 
-    def pretrain_init(self, b_goal_policy):
-        self.b_goal_policy = b_goal_policy.to(DEFAULT_DEVICE)
-        self.b_goal_policy_optimizer = torch.optim.Adam(self.b_goal_policy.parameters(), lr=0.0001)
+    def pretrain_init(agent, b_goal_policy):
+        agent.b_goal_policy = b_goal_policy.to(DEFAULT_DEVICE)
+        agent.b_goal_policy_optimizer = torch.optim.Adam(agent.b_goal_policy.parameters(), lr=0.0001)
 
-    def pretrain(self, observations, actions, next_observations, rewards, terminals):
+    def pretrain(agent, observations, actions, next_observations, rewards, terminals):
         # Update behavior goal policy
-        b_goal_out = self.b_goal_policy(observations)
+        b_goal_out = agent.b_goal_policy(observations)
         b_g_loss = -b_goal_out.log_prob(next_observations).mean()
         b_g_loss = torch.mean(b_g_loss)
-        self.b_goal_policy_optimizer.zero_grad(set_to_none=True)
+        agent.b_goal_policy_optimizer.zero_grad(set_to_none=True)
         b_g_loss.backward()
-        self.b_goal_policy_optimizer.step()
+        agent.b_goal_policy_optimizer.step()
 
-        if (self.pretrain_step+1) % 10000 == 0:
-            wandb.log({"b_g_loss": b_g_loss}, step=self.pretrain_step)
+        if (agent.pretrain_step+1) % 10000 == 0:
+            wandb.log({"b_g_loss": b_g_loss}, step=agent.pretrain_step)
 
-        self.pretrain_step += 1
+        agent.pretrain_step += 1
 
-    def save_pretrain(self, filename):
-        torch.save(self.b_goal_policy.state_dict(), filename + "-behavior_goal_network")
+    def save_pretrain(agent, filename):
+        torch.save(agent.b_goal_policy.state_dict(), filename + "-behavior_goal_network")
         print(f"***save models to {filename}***")
 
-    def load_pretrain(self, filename):
-        self.b_goal_policy.load_state_dict(torch.load(filename + "-behavior_goal_network", map_location=DEFAULT_DEVICE))
+    def load_pretrain(agent, filename):
+        agent.b_goal_policy.load_state_dict(torch.load(filename + "-behavior_goal_network", map_location=DEFAULT_DEVICE))
         print(f"***load models from {filename}***")
 
-    def save(self, filename):
-        torch.save(self.policy.state_dict(), filename + "-policy_network")
-        torch.save(self.goal_policy.state_dict(), filename + "-goal_network")
+    def save(agent, filename):
+        torch.save(agent.policy.state_dict(), filename + "-policy_network")
+        torch.save(agent.goal_policy.state_dict(), filename + "-goal_network")
         print(f"***save models to {filename}***")
 
-    def load(self, filename):
-        self.policy.load_state_dict(torch.load(filename + "-policy_network", map_location=torch.device('cpu')))
+    def load(agent, filename):
+        agent.policy.load_state_dict(torch.load(filename + "-policy_network", map_location=torch.device('cpu')))
         print(f"***load the RvS policy model from {filename}***")

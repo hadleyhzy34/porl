@@ -7,7 +7,7 @@ show_animation = False
 
 class AStarPlanner:
 
-    def __init__(self, ox, oy, resolution, rr):
+    def __init__(agent, ox, oy, resolution, rr):
         """
         Initialize grid map for a star planning
         ox: x position list of Obstacles [m]
@@ -16,27 +16,27 @@ class AStarPlanner:
         rr: robot radius[m]
         """
 
-        self.resolution = resolution
-        self.rr = rr
-        self.min_x, self.min_y = 0, 0
-        self.max_x, self.max_y = 0, 0
-        self.obstacle_map = None
-        self.x_width, self.y_width = 0, 0
-        self.motion = self.get_motion_model()
-        self.calc_obstacle_map(ox, oy)
+        agent.resolution = resolution
+        agent.rr = rr
+        agent.min_x, agent.min_y = 0, 0
+        agent.max_x, agent.max_y = 0, 0
+        agent.obstacle_map = None
+        agent.x_width, agent.y_width = 0, 0
+        agent.motion = agent.get_motion_model()
+        agent.calc_obstacle_map(ox, oy)
 
     class Node:
-        def __init__(self, x, y, cost, parent_index):
-            self.x = x  # index of grid
-            self.y = y  # index of grid
-            self.cost = cost
-            self.parent_index = parent_index
+        def __init__(agent, x, y, cost, parent_index):
+            agent.x = x  # index of grid
+            agent.y = y  # index of grid
+            agent.cost = cost
+            agent.parent_index = parent_index
 
-        def __str__(self):
-            return str(self.x) + "," + str(self.y) + "," + str(
-                self.cost) + "," + str(self.parent_index)
+        def __str__(agent):
+            return str(agent.x) + "," + str(agent.y) + "," + str(
+                agent.cost) + "," + str(agent.parent_index)
 
-    def planning(self, sx, sy, gx, gy):
+    def planning(agent, sx, sy, gx, gy):
         """
         A star path search
         input:
@@ -49,13 +49,13 @@ class AStarPlanner:
             ry: y position list of the final path
         """
 
-        start_node = self.Node(self.calc_xy_index(sx, self.min_x),
-                               self.calc_xy_index(sy, self.min_y), 0.0, -1)
-        goal_node = self.Node(self.calc_xy_index(gx, self.min_x),
-                              self.calc_xy_index(gy, self.min_y), 0.0, -1)
+        start_node = agent.Node(agent.calc_xy_index(sx, agent.min_x),
+                               agent.calc_xy_index(sy, agent.min_y), 0.0, -1)
+        goal_node = agent.Node(agent.calc_xy_index(gx, agent.min_x),
+                              agent.calc_xy_index(gy, agent.min_y), 0.0, -1)
 
         open_set, closed_set = dict(), dict()
-        open_set[self.calc_grid_index(start_node)] = start_node
+        open_set[agent.calc_grid_index(start_node)] = start_node
 
         while 1:
             if len(open_set) == 0:
@@ -65,15 +65,15 @@ class AStarPlanner:
 
             c_id = min(
                 open_set,
-                key=lambda o: open_set[o].cost + self.calc_heuristic(goal_node,
+                key=lambda o: open_set[o].cost + agent.calc_heuristic(goal_node,
                                                                      open_set[
                                                                          o]))
             current = open_set[c_id]
 
             # show graph
             if show_animation:  # pragma: no cover
-                plt.plot(self.calc_grid_position(current.x, self.min_x),
-                         self.calc_grid_position(current.y, self.min_y), "xc")
+                plt.plot(agent.calc_grid_position(current.x, agent.min_x),
+                         agent.calc_grid_position(current.y, agent.min_y), "xc")
                 # for stopping simulation with the esc key.
                 plt.gcf().canvas.mpl_connect('key_release_event',
                                              lambda event: [exit(
@@ -94,14 +94,14 @@ class AStarPlanner:
             closed_set[c_id] = current
 
             # expand_grid search grid based on motion model
-            for i, _ in enumerate(self.motion):
-                node = self.Node(current.x + self.motion[i][0],
-                                 current.y + self.motion[i][1],
-                                 current.cost + self.motion[i][2], c_id)
-                n_id = self.calc_grid_index(node)
+            for i, _ in enumerate(agent.motion):
+                node = agent.Node(current.x + agent.motion[i][0],
+                                 current.y + agent.motion[i][1],
+                                 current.cost + agent.motion[i][2], c_id)
+                n_id = agent.calc_grid_index(node)
 
                 # If the node is not safe, do nothing
-                if not self.verify_node(node):
+                if not agent.verify_node(node):
                     continue
 
                 if n_id in closed_set:
@@ -115,19 +115,19 @@ class AStarPlanner:
                         open_set[n_id] = node
 
         # pdb.set_trace()
-        rx, ry = self.calc_final_path(goal_node, closed_set)
+        rx, ry = agent.calc_final_path(goal_node, closed_set)
 
         return rx, ry
 
-    def calc_final_path(self, goal_node, closed_set):
+    def calc_final_path(agent, goal_node, closed_set):
         # generate final course
-        rx, ry = [self.calc_grid_position(goal_node.x, self.min_x)], [
-            self.calc_grid_position(goal_node.y, self.min_y)]
+        rx, ry = [agent.calc_grid_position(goal_node.x, agent.min_x)], [
+            agent.calc_grid_position(goal_node.y, agent.min_y)]
         parent_index = goal_node.parent_index
         while parent_index != -1:
             n = closed_set[parent_index]
-            rx.append(self.calc_grid_position(n.x, self.min_x))
-            ry.append(self.calc_grid_position(n.y, self.min_y))
+            rx.append(agent.calc_grid_position(n.x, agent.min_x))
+            ry.append(agent.calc_grid_position(n.y, agent.min_y))
             parent_index = n.parent_index
 
         return rx, ry
@@ -138,72 +138,72 @@ class AStarPlanner:
         d = w * math.hypot(n1.x - n2.x, n1.y - n2.y)
         return d
 
-    def calc_grid_position(self, index, min_position):
+    def calc_grid_position(agent, index, min_position):
         """
         calc grid position
         :param index:
         :param min_position:
         :return:
         """
-        pos = index * self.resolution + min_position
+        pos = index * agent.resolution + min_position
         return pos
 
-    def calc_xy_index(self, position, min_pos):
-        return round((position - min_pos) / self.resolution)
+    def calc_xy_index(agent, position, min_pos):
+        return round((position - min_pos) / agent.resolution)
 
-    def calc_grid_index(self, node):
-        return (node.y - self.min_y) * self.x_width + (node.x - self.min_x)
+    def calc_grid_index(agent, node):
+        return (node.y - agent.min_y) * agent.x_width + (node.x - agent.min_x)
 
-    def verify_node(self, node):
-        px = self.calc_grid_position(node.x, self.min_x)
-        py = self.calc_grid_position(node.y, self.min_y)
+    def verify_node(agent, node):
+        px = agent.calc_grid_position(node.x, agent.min_x)
+        py = agent.calc_grid_position(node.y, agent.min_y)
 
-        if px < self.min_x:
+        if px < agent.min_x:
             return False
-        elif py < self.min_y:
+        elif py < agent.min_y:
             return False
-        elif px >= self.max_x:
+        elif px >= agent.max_x:
             return False
-        elif py >= self.max_y:
+        elif py >= agent.max_y:
             return False
 
         # collision check
-        if self.obstacle_map[node.x][node.y]:
+        if agent.obstacle_map[node.x][node.y]:
             return False
 
         return True
 
-    def calc_obstacle_map(self, ox, oy):
+    def calc_obstacle_map(agent, ox, oy):
 
-        # self.min_x = round(min(ox))
-        # self.min_y = round(min(oy))
-        # self.max_x = round(max(ox))
-        # self.max_y = round(max(oy))
-        self.min_x = -10.
-        self.min_y = -5.
-        self.max_x = 10.
-        self.max_y = 5.
-        # print("min_x:", self.min_x)
-        # print("min_y:", self.min_y)
-        # print("max_x:", self.max_x)
-        # print("max_y:", self.max_y)
+        # agent.min_x = round(min(ox))
+        # agent.min_y = round(min(oy))
+        # agent.max_x = round(max(ox))
+        # agent.max_y = round(max(oy))
+        agent.min_x = -10.
+        agent.min_y = -5.
+        agent.max_x = 10.
+        agent.max_y = 5.
+        # print("min_x:", agent.min_x)
+        # print("min_y:", agent.min_y)
+        # print("max_x:", agent.max_x)
+        # print("max_y:", agent.max_y)
 
-        self.x_width = round((self.max_x - self.min_x) / self.resolution)
-        self.y_width = round((self.max_y - self.min_y) / self.resolution)
-        # print("x_width:", self.x_width)
-        # print("y_width:", self.y_width)
+        agent.x_width = round((agent.max_x - agent.min_x) / agent.resolution)
+        agent.y_width = round((agent.max_y - agent.min_y) / agent.resolution)
+        # print("x_width:", agent.x_width)
+        # print("y_width:", agent.y_width)
 
         # obstacle map generation
-        self.obstacle_map = [[False for _ in range(self.y_width)]
-                             for _ in range(self.x_width)]
-        for ix in range(self.x_width):
-            x = self.calc_grid_position(ix, self.min_x)
-            for iy in range(self.y_width):
-                y = self.calc_grid_position(iy, self.min_y)
+        agent.obstacle_map = [[False for _ in range(agent.y_width)]
+                             for _ in range(agent.x_width)]
+        for ix in range(agent.x_width):
+            x = agent.calc_grid_position(ix, agent.min_x)
+            for iy in range(agent.y_width):
+                y = agent.calc_grid_position(iy, agent.min_y)
                 for iox, ioy in zip(ox, oy):
                     d = math.hypot(iox - x, ioy - y)
-                    if d <= self.rr:
-                        self.obstacle_map[ix][iy] = True
+                    if d <= agent.rr:
+                        agent.obstacle_map[ix][iy] = True
                         break
 
     @staticmethod

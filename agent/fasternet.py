@@ -96,43 +96,43 @@ def drop_path(x, drop_prob: float = 0., training: bool = False, scale_by_keep: b
 class DropPath(nn.Module):
     """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks).
     """
-    def __init__(self, drop_prob: float = 0., scale_by_keep: bool = True):
-        super(DropPath, self).__init__()
-        self.drop_prob = drop_prob
-        self.scale_by_keep = scale_by_keep
+    def __init__(agent, drop_prob: float = 0., scale_by_keep: bool = True):
+        super(DropPath, agent).__init__()
+        agent.drop_prob = drop_prob
+        agent.scale_by_keep = scale_by_keep
 
-    def forward(self, x):
-        return drop_path(x, self.drop_prob, self.training, self.scale_by_keep)
+    def forward(agent, x):
+        return drop_path(x, agent.drop_prob, agent.training, agent.scale_by_keep)
 
-    def extra_repr(self):
-        return f'drop_prob={round(self.drop_prob,3):0.3f}'
+    def extra_repr(agent):
+        return f'drop_prob={round(agent.drop_prob,3):0.3f}'
 
 class Partial_conv3(nn.Module):
 
-    def __init__(self, dim, n_div, forward):
+    def __init__(agent, dim, n_div, forward):
         super().__init__()
-        self.dim_conv3 = dim // n_div
-        self.dim_untouched = dim - self.dim_conv3
-        self.partial_conv3 = nn.Conv2d(self.dim_conv3, self.dim_conv3, 3, 1, 1, bias=False)
+        agent.dim_conv3 = dim // n_div
+        agent.dim_untouched = dim - agent.dim_conv3
+        agent.partial_conv3 = nn.Conv2d(agent.dim_conv3, agent.dim_conv3, 3, 1, 1, bias=False)
 
         if forward == 'slicing':
-            self.forward = self.forward_slicing
+            agent.forward = agent.forward_slicing
         elif forward == 'split_cat':
-            self.forward = self.forward_split_cat
+            agent.forward = agent.forward_split_cat
         else:
             raise NotImplementedError
 
-    def forward_slicing(self, x: Tensor) -> Tensor:
+    def forward_slicing(agent, x: Tensor) -> Tensor:
         # only for inference
         x = x.clone()   # !!! Keep the original input intact for the residual connection later
-        x[:, :self.dim_conv3, :, :] = self.partial_conv3(x[:, :self.dim_conv3, :, :])
+        x[:, :agent.dim_conv3, :, :] = agent.partial_conv3(x[:, :agent.dim_conv3, :, :])
 
         return x
 
-    def forward_split_cat(self, x: Tensor) -> Tensor:
+    def forward_split_cat(agent, x: Tensor) -> Tensor:
         # for training/inference
-        x1, x2 = torch.split(x, [self.dim_conv3, self.dim_untouched], dim=1)
-        x1 = self.partial_conv3(x1)
+        x1, x2 = torch.split(x, [agent.dim_conv3, agent.dim_untouched], dim=1)
+        x1 = agent.partial_conv3(x1)
         x = torch.cat((x1, x2), 1)
 
         return x
@@ -140,7 +140,7 @@ class Partial_conv3(nn.Module):
 
 class MLPBlock(nn.Module):
 
-    def __init__(self,
+    def __init__(agent,
                  dim,
                  n_div,
                  mlp_ratio,
@@ -152,10 +152,10 @@ class MLPBlock(nn.Module):
                  ):
 
         super().__init__()
-        self.dim = dim
-        self.mlp_ratio = mlp_ratio
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.n_div = n_div
+        agent.dim = dim
+        agent.mlp_ratio = mlp_ratio
+        agent.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        agent.n_div = n_div
 
         mlp_hidden_dim = int(dim * mlp_ratio)
 
@@ -166,37 +166,37 @@ class MLPBlock(nn.Module):
             nn.Conv2d(mlp_hidden_dim, dim, 1, bias=False)
         ]
 
-        self.mlp = nn.Sequential(*mlp_layer)
+        agent.mlp = nn.Sequential(*mlp_layer)
 
-        self.spatial_mixing = Partial_conv3(
+        agent.spatial_mixing = Partial_conv3(
             dim,
             n_div,
             pconv_fw_type
         )
 
         if layer_scale_init_value > 0:
-            self.layer_scale = nn.Parameter(layer_scale_init_value * torch.ones((dim)), requires_grad=True)
-            self.forward = self.forward_layer_scale
+            agent.layer_scale = nn.Parameter(layer_scale_init_value * torch.ones((dim)), requires_grad=True)
+            agent.forward = agent.forward_layer_scale
         else:
-            self.forward = self.forward
+            agent.forward = agent.forward
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(agent, x: Tensor) -> Tensor:
         shortcut = x
-        x = self.spatial_mixing(x)
-        x = shortcut + self.drop_path(self.mlp(x))
+        x = agent.spatial_mixing(x)
+        x = shortcut + agent.drop_path(agent.mlp(x))
         return x
 
-    def forward_layer_scale(self, x: Tensor) -> Tensor:
+    def forward_layer_scale(agent, x: Tensor) -> Tensor:
         shortcut = x
-        x = self.spatial_mixing(x)
-        x = shortcut + self.drop_path(
-            self.layer_scale.unsqueeze(-1).unsqueeze(-1) * self.mlp(x))
+        x = agent.spatial_mixing(x)
+        x = shortcut + agent.drop_path(
+            agent.layer_scale.unsqueeze(-1).unsqueeze(-1) * agent.mlp(x))
         return x
 
 
 class BasicStage(nn.Module):
 
-    def __init__(self,
+    def __init__(agent,
                  dim,
                  depth,
                  n_div,
@@ -224,46 +224,46 @@ class BasicStage(nn.Module):
             for i in range(depth)
         ]
 
-        self.blocks = nn.Sequential(*blocks_list)
+        agent.blocks = nn.Sequential(*blocks_list)
 
-    def forward(self, x: Tensor) -> Tensor:
-        x = self.blocks(x)
+    def forward(agent, x: Tensor) -> Tensor:
+        x = agent.blocks(x)
         return x
 
 
 class PatchEmbed(nn.Module):
 
-    def __init__(self, patch_size, patch_stride, in_chans, embed_dim, norm_layer):
+    def __init__(agent, patch_size, patch_stride, in_chans, embed_dim, norm_layer):
         super().__init__()
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_stride, bias=False)
+        agent.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_stride, bias=False)
         if norm_layer is not None:
-            self.norm = norm_layer(embed_dim)
+            agent.norm = norm_layer(embed_dim)
         else:
-            self.norm = nn.Identity()
+            agent.norm = nn.Identity()
 
-    def forward(self, x: Tensor) -> Tensor:
-        x = self.norm(self.proj(x))
+    def forward(agent, x: Tensor) -> Tensor:
+        x = agent.norm(agent.proj(x))
         return x
 
 
 class PatchMerging(nn.Module):
 
-    def __init__(self, patch_size2, patch_stride2, dim, norm_layer):
+    def __init__(agent, patch_size2, patch_stride2, dim, norm_layer):
         super().__init__()
-        self.reduction = nn.Conv2d(dim, 2 * dim, kernel_size=patch_size2, stride=patch_stride2, bias=False)
+        agent.reduction = nn.Conv2d(dim, 2 * dim, kernel_size=patch_size2, stride=patch_stride2, bias=False)
         if norm_layer is not None:
-            self.norm = norm_layer(2 * dim)
+            agent.norm = norm_layer(2 * dim)
         else:
-            self.norm = nn.Identity()
+            agent.norm = nn.Identity()
 
-    def forward(self, x: Tensor) -> Tensor:
-        x = self.norm(self.reduction(x))
+    def forward(agent, x: Tensor) -> Tensor:
+        x = agent.norm(agent.reduction(x))
         return x
 
 
 class FasterNet(nn.Module):
 
-    def __init__(self,
+    def __init__(agent,
                  in_chans=3,
                  num_classes=1000,
                  embed_dim=96,
@@ -301,21 +301,21 @@ class FasterNet(nn.Module):
             raise NotImplementedError
 
         if not fork_feat:
-            self.num_classes = num_classes
-        self.num_stages = len(depths)
-        self.embed_dim = embed_dim
-        self.patch_norm = patch_norm
-        self.num_features = int(embed_dim * 2 ** (self.num_stages - 1))
-        self.mlp_ratio = mlp_ratio
-        self.depths = depths
+            agent.num_classes = num_classes
+        agent.num_stages = len(depths)
+        agent.embed_dim = embed_dim
+        agent.patch_norm = patch_norm
+        agent.num_features = int(embed_dim * 2 ** (agent.num_stages - 1))
+        agent.mlp_ratio = mlp_ratio
+        agent.depths = depths
 
         # split image into non-overlapping patches
-        self.patch_embed = PatchEmbed(
+        agent.patch_embed = PatchEmbed(
             patch_size=patch_size,
             patch_stride=patch_stride,
             in_chans=in_chans,
             embed_dim=embed_dim,
-            norm_layer=norm_layer if self.patch_norm else None
+            norm_layer=norm_layer if agent.patch_norm else None
         )
 
         # stochastic depth decay rule
@@ -324,11 +324,11 @@ class FasterNet(nn.Module):
 
         # build layers
         stages_list = []
-        for i_stage in range(self.num_stages):
+        for i_stage in range(agent.num_stages):
             stage = BasicStage(dim=int(embed_dim * 2 ** i_stage),
                                n_div=n_div,
                                depth=depths[i_stage],
-                               mlp_ratio=self.mlp_ratio,
+                               mlp_ratio=agent.mlp_ratio,
                                drop_path=dpr[sum(depths[:i_stage]):sum(depths[:i_stage + 1])],
                                layer_scale_init_value=layer_scale_init_value,
                                norm_layer=norm_layer,
@@ -338,7 +338,7 @@ class FasterNet(nn.Module):
             stages_list.append(stage)
 
             # patch merging layer
-            if i_stage < self.num_stages - 1:
+            if i_stage < agent.num_stages - 1:
                 stages_list.append(
                     PatchMerging(patch_size2=patch_size2,
                                  patch_stride2=patch_stride2,
@@ -346,38 +346,38 @@ class FasterNet(nn.Module):
                                  norm_layer=norm_layer)
                 )
 
-        self.stages = nn.Sequential(*stages_list)
+        agent.stages = nn.Sequential(*stages_list)
 
-        self.fork_feat = fork_feat
+        agent.fork_feat = fork_feat
 
-        if self.fork_feat:
-            self.forward = self.forward_det
+        if agent.fork_feat:
+            agent.forward = agent.forward_det
             # add a norm layer for each output
-            self.out_indices = [0, 2, 4, 6]
-            for i_emb, i_layer in enumerate(self.out_indices):
+            agent.out_indices = [0, 2, 4, 6]
+            for i_emb, i_layer in enumerate(agent.out_indices):
                 if i_emb == 0 and os.environ.get('FORK_LAST3', None):
                     raise NotImplementedError
                 else:
                     layer = norm_layer(int(embed_dim * 2 ** i_emb))
                 layer_name = f'norm{i_layer}'
-                self.add_module(layer_name, layer)
+                agent.add_module(layer_name, layer)
         else:
-            self.forward = self.forward_cls
+            agent.forward = agent.forward_cls
             # Classifier head
-            self.avgpool_pre_head = nn.Sequential(
+            agent.avgpool_pre_head = nn.Sequential(
                 nn.AdaptiveAvgPool2d(1),
-                nn.Conv2d(self.num_features, feature_dim, 1, bias=False),
+                nn.Conv2d(agent.num_features, feature_dim, 1, bias=False),
                 act_layer()
             )
-            self.head = nn.Linear(feature_dim, num_classes) \
+            agent.head = nn.Linear(feature_dim, num_classes) \
                 if num_classes > 0 else nn.Identity()
 
-        self.apply(self.cls_init_weights)
-        self.init_cfg = copy.deepcopy(init_cfg)
-        if self.fork_feat and (self.init_cfg is not None or pretrained is not None):
-            self.init_weights()
+        agent.apply(agent.cls_init_weights)
+        agent.init_cfg = copy.deepcopy(init_cfg)
+        if agent.fork_feat and (agent.init_cfg is not None or pretrained is not None):
+            agent.init_weights()
 
-    def cls_init_weights(self, m):
+    def cls_init_weights(agent, m):
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
@@ -391,20 +391,20 @@ class FasterNet(nn.Module):
             nn.init.constant_(m.weight, 1.0)
 
     # init for mmdetection by loading imagenet pre-trained weights
-    def init_weights(self, pretrained=None):
+    def init_weights(agent, pretrained=None):
         logger = get_root_logger()
-        if self.init_cfg is None and pretrained is None:
+        if agent.init_cfg is None and pretrained is None:
             logger.warn(f'No pre-trained weights for '
-                        f'{self.__class__.__name__}, '
+                        f'{agent.__class__.__name__}, '
                         f'training start from scratch')
             pass
         else:
-            assert 'checkpoint' in self.init_cfg, f'Only support ' \
+            assert 'checkpoint' in agent.init_cfg, f'Only support ' \
                                                   f'specify `Pretrained` in ' \
                                                   f'`init_cfg` in ' \
-                                                  f'{self.__class__.__name__} '
-            if self.init_cfg is not None:
-                ckpt_path = self.init_cfg['checkpoint']
+                                                  f'{agent.__class__.__name__} '
+            if agent.init_cfg is not None:
+                ckpt_path = agent.init_cfg['checkpoint']
             elif pretrained is not None:
                 ckpt_path = pretrained
 
@@ -419,32 +419,32 @@ class FasterNet(nn.Module):
 
             state_dict = _state_dict
             missing_keys, unexpected_keys = \
-                self.load_state_dict(state_dict, False)
+                agent.load_state_dict(state_dict, False)
 
             # show for debug
             print('missing_keys: ', missing_keys)
             print('unexpected_keys: ', unexpected_keys)
 
-    def forward_cls(self, x):
+    def forward_cls(agent, x):
         # output only the features of last layer for image classification
         # pdb.set_trace()
         x = state2costmap(x)
-        x = self.patch_embed(x)
-        x = self.stages(x)
-        x = self.avgpool_pre_head(x)  # B C 1 1
+        x = agent.patch_embed(x)
+        x = agent.stages(x)
+        x = agent.avgpool_pre_head(x)  # B C 1 1
         x = torch.flatten(x, 1)
-        x = self.head(x)
+        x = agent.head(x)
 
         return x
 
-    def forward_det(self, x: Tensor) -> Tensor:
+    def forward_det(agent, x: Tensor) -> Tensor:
         # output the features of four stages for dense prediction
-        x = self.patch_embed(x)
+        x = agent.patch_embed(x)
         outs = []
-        for idx, stage in enumerate(self.stages):
+        for idx, stage in enumerate(agent.stages):
             x = stage(x)
-            if self.fork_feat and idx in self.out_indices:
-                norm_layer = getattr(self, f'norm{idx}')
+            if agent.fork_feat and idx in agent.out_indices:
+                norm_layer = getattr(agent, f'norm{idx}')
                 x_out = norm_layer(x)
                 outs.append(x_out)
 

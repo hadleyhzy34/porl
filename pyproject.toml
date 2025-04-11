@@ -1,0 +1,82 @@
+# pyproject.toml
+
+[build-system]
+requires = ["setuptools>=61.0"] # Specify minimum setuptools version
+build-backend = "setuptools.build_meta" # Use setuptools as the build backend
+
+[project]
+name = "porl" # Distribution name (used for pip install)
+version = "0.1.0" # Sync with src/my_calculator/__init__.py or use tools
+authors = [
+  { name="Your Name", email="your.email@example.com" },
+]
+description = "A simple calculator package demo."
+readme = "README.md"
+license = { file="LICENSE" } # Or text = "MIT", etc.
+requires-python = ">=3.8" # Specify compatible Python versions
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License", # Choose your license
+    "Operating System :: OS Independent",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = ["calculator", "demo", "example"]
+# Add runtime dependencies here if needed (e.g., "requests>=2.20")
+dependencies = [
+    # No external runtime dependencies for this simple example
+    # Example: "numpy>=1.20"
+]
+
+# Optional: Project URLs
+[project.urls]
+"Homepage" = "https://github.com/yourusername/my_calculator_project" # Example
+"Bug Tracker" = "https://github.com/yourusername/my_calculator_project/issues" # Example
+
+# Define optional dependencies for development, testing, etc.
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",      # For running tests
+    "flake8>=5.0",      # Linter
+    "black>=23.0",      # Code formatter
+    "mypy>=1.0",        # Static type checker
+    "isort>=5.0",       # Import sorter
+    "pip-tools",        # For managing requirements files (optional)
+]
+# You could have other groups like 'docs', 'notebooks', etc.
+# test = ["pytest"] # Could separate test deps if desired
+
+# Define command-line scripts (entry points)
+[project.scripts]
+# command_name = "package.module:function_to_run"
+mycalc = "my_calculator.cli:main"
+
+# --- Tool Configurations ---
+
+# Tell setuptools to find packages automatically in the 'src' directory
+[tool.setuptools.packages.find]
+where = ["src"]  # look for packages in src/
+
+# Example: pytest configuration
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --cov=src/my_calculator --cov-report=term-missing" # Example options: report reasons for skip/fail, quiet, coverage
+testpaths = [
+    "tests",
+]
+
+# Example: black configuration
+[tool.black]
+line-length = 88
+target-version = ['py38'] # Match requires-python if possible
+
+# Example: flake8 configuration (or use .flake8 file)
+# [tool.flake8]
+# max-line-length = 88
+# extend-ignore = "E203" # Example ignore rule
+
+# Example: isort configuration
+[tool.isort]
+profile = "black"
+line_length = 88

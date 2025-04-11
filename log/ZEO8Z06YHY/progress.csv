@@ -1,5 +1,0 @@
-rollout/exploration_rate,rollout/ep_rew_mean,time/time_elapsed,status,time/total_timesteps,reward,time/fps,time/episodes,rollout/ep_len_mean
-0.9529749999999999,-246.379416,20,-1.0,99,-200.0,4,1,99.0
-0.9458499999999996,-309.554466,23,-1.0,114,-200.0,4,2,15.0
-0.9121250000000002,-830.081746,37,-1.0,185,-200.0,4,3,71.0
-0.7814999999999999,-541.182203,93,-1.0,460,-200.0,4,4,275.0

@@ -1,6 +1,3 @@
-import random
-from collections import deque
-
 import numpy as np
 import torch
 
@@ -77,17 +74,3 @@ class ReplayBuffer:
     def __len__(self) -> int:
         """Return the current number of experiences in the buffer."""
         return self.size
-
-
-# class replaybuffer:
-#     def __init__(agent, capacity):
-#         agent.buffer = deque(maxlen=capacity)
-#
-#     def push(agent, state, action, reward, next_state, done):
-#         agent.buffer.append((state, action, reward, next_state, done))
-#
-#     def sample(agent, batch_size):
-#         return random.sample(agent.buffer, batch_size)
-#
-#     def __len__(agent):
-#         return len(agent.buffer)
