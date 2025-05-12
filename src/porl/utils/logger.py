@@ -36,6 +36,9 @@ class Logger:
         self.episode_rewards = []
         self.episode_losses = []
 
+        # track offline training metrics
+        self.losses = []
+
     def log_step(
         self,
         episode: int,
@@ -116,3 +119,19 @@ class Logger:
         """Close the logger and flush all data."""
         self.csv_file.close()
         self.writer.close()
+
+    def log_loss(
+        self,
+        iteration: int,
+        loss: float,
+    ) -> None:
+        """Log metrics for a single step.
+
+        Args:
+            iteration (int): Current step number within the episode.
+            loss (float): Loss for the step (None if no training occurred).
+        """
+        self.losses.append(loss)
+
+        # Log to TensorBoard (step-level)
+        self.writer.add_scalar("Loss/Step", loss, iteration)

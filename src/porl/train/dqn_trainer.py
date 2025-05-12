@@ -56,6 +56,7 @@ class DQNTrainer:
         self.optimizer = optim.Adam(self.q_network.parameters(), lr=0.0005)
 
         # Initialize replay buffer
+        # pdb.set_trace()
         self.replay_buffer = ReplayBuffer(100000, (self.state_size,), device)
         self.batch_size = 64
 
@@ -72,7 +73,28 @@ class DQNTrainer:
         }
         self.logger.log_hyperparameters(hparams)
 
-    def train(
+    def learn(self) -> float:
+        # Sample directly as tensors
+        states, actions, rewards, next_states, dones = self.replay_buffer.sample(
+            self.batch_size
+        )
+
+        with torch.no_grad():
+            next_q_values = self.target_network(next_states)
+            max_next_q_values = next_q_values.max(dim=1)[0]
+            targets = rewards + self.gamma * max_next_q_values * (1 - dones)
+
+        q_values = self.q_network(states)
+        q_values = q_values.gather(1, actions.unsqueeze(1)).squeeze(1)
+        loss = F.mse_loss(q_values, targets)
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        return loss.item()
+
+    def train_online(
         self, env, policy, num_episodes: int = 1000, max_steps: int = 1000
     ) -> List[float]:
         rewards_history = []
@@ -124,3 +146,27 @@ class DQNTrainer:
         env.close()
         self.logger.close()
         return rewards_history
+
+    def train_offline(self, policy=None, num_iterations: int = 10000) -> List[float]:
+        losses = []
+
+        for self.training_step in range(num_iterations):
+            if policy is None:
+                loss = self.learn()
+            else:
+                loss = policy()
+
+            # Log the reward for this step (loss will be logged after training)
+            self.logger.log_loss(self.training_step, loss)
+
+            # Update target network
+            if self.training_step % self.update_target_freq == 0:
+                self.target_network.load_state_dict(self.q_network.state_dict())
+
+            losses.append(loss)
+
+            if self.training_step % 10 == 0:
+                print(f"step {self.training_step}, Loss: {loss}")
+
+        self.logger.close()
+        return losses
