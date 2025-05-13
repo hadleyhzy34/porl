@@ -89,7 +89,7 @@ class CQLTrainer(DQNTrainer):
         states, actions, rewards, next_states, dones = self.replay_buffer.sample(
             self.batch_size
         )
-        
+
         # Compute TD loss
         with torch.no_grad():
             next_q_values = self.target_network(next_states)
@@ -115,7 +115,9 @@ class CQLTrainer(DQNTrainer):
         # Log both losses if you have a logger
         if hasattr(self, "logger"):
             self.logger.writer.add_scalar("Loss/TD", td_loss.item(), self.training_step)
-            self.logger.writer.add_scalar("Loss/CQLPenalty", cql_penalty.item(), self.training_step)
+            self.logger.writer.add_scalar(
+                "Loss/CQLPenalty", cql_penalty.item(), self.training_step
+            )
             self.logger.writer.add_scalar("Loss/Total", loss.item(), self.training_step)
             self.training_step += 1
 

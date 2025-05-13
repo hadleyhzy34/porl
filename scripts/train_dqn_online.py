@@ -23,11 +23,8 @@ def main():
         log_dir="logs",
     )
 
-    # collect dataset
-    collect_dataset(env, trainer)
-
-    # train offline
-    trainer.train_offline(num_iterations=10000)
+    # train online
+    trainer.train_online(env)
 
 
 if __name__ == "__main__":

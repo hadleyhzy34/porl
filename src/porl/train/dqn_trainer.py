@@ -15,6 +15,25 @@ from porl.utils.logger import Logger
 
 
 class DQNTrainer:
+    """[TODO:description]
+
+    Attributes:
+        state_size: [TODO:attribute]
+        action_size: [TODO:attribute]
+        device: [TODO:attribute]
+        gamma: [TODO:attribute]
+        epsilon: [TODO:attribute]
+        epsilon_min: [TODO:attribute]
+        epsilon_decay: [TODO:attribute]
+        update_target_freq: [TODO:attribute]
+        q_network: [TODO:attribute]
+        target_network: [TODO:attribute]
+        optimizer: [TODO:attribute]
+        replay_buffer: [TODO:attribute]
+        batch_size: [TODO:attribute]
+        logger: [TODO:attribute]
+    """
+
     """A trainer for Deep Q-Network (DQN) reinforcement learning.
 
     Args:
@@ -74,6 +93,11 @@ class DQNTrainer:
         self.logger.log_hyperparameters(hparams)
 
     def learn(self) -> float:
+        """one step backward learning procedure
+
+        Returns:
+            one step loss value: float
+        """
         # Sample directly as tensors
         states, actions, rewards, next_states, dones = self.replay_buffer.sample(
             self.batch_size
@@ -95,7 +119,7 @@ class DQNTrainer:
         return loss.item()
 
     def train_online(
-        self, env, policy, num_episodes: int = 1000, max_steps: int = 1000
+        self, env, policy=None, num_episodes: int = 1000, max_steps: int = 1000
     ) -> List[float]:
         rewards_history = []
 
@@ -122,7 +146,10 @@ class DQNTrainer:
                 self.logger.log_step(episode, step, reward, None, self.epsilon)
 
                 if len(self.replay_buffer) >= self.batch_size:
-                    loss = policy(self)
+                    if policy is None:
+                        loss = self.learn()
+                    else:
+                        loss = policy()
                     if self.logger is not None:
                         self.logger.log_step(episode, step, reward, loss, self.epsilon)
 
