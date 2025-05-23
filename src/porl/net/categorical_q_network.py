@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import pdb
+from typing import List
 
 
 class CategoricalQNetwork(nn.Module):
@@ -22,9 +23,9 @@ class CategoricalQNetwork(nn.Module):
         self,
         state_size: int,
         action_size: int,
-        atom_size: int = 51, # Number of atoms in the categorical distribution
-        v_min: float = -10,    # Minimum value of the support
-        v_max: float = 10,     # Maximum value of the support
+        atom_size: int = 51,  # Number of atoms in the categorical distribution
+        v_min: float = -10,  # Minimum value of the support
+        v_max: float = 10,  # Maximum value of the support
         hidden_sizes: List[int] = [128, 128],
     ):
         super().__init__()
@@ -88,20 +89,21 @@ class CategoricalQNetwork(nn.Module):
             q_values: torch.Tensor, (b,a)
         """
         # Removed pdb.set_trace()
+        # pdb.set_trace()
         # Call the forward pass to get log-probabilities for each action's value distribution.
         # log_probs has shape: (batch_size, action_size, atom_size)
         log_probs = self(x)
-        
+
         # Convert log-probabilities to actual probabilities using exp().
         # probs has shape: (batch_size, action_size, atom_size)
         probs = log_probs.exp()
-        
+
         # Expand self.support to match the shape of probs for element-wise multiplication.
         # self.support is originally [atom_size].
         # support_expanded will have shape: [batch_size, action_size, atom_size]
         # and will be on the same device as input x.
         support_expanded = self.support.expand_as(probs).to(x.device)
-        
+
         # Calculate the expected Q-value for each action.
         # This is done by taking the dot product of the probability distribution (probs)
         # and the support values (support_expanded) for each action.

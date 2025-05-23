@@ -22,7 +22,7 @@ class C51Trainer(DQNTrainer):
         atom_size: int = 51,
         v_min: float = -10,
         v_max: float = 10,
-        network_hidden_sizes: List[int] = [128, 128], # Added parameter
+        network_hidden_sizes: List[int] = [128, 128],  # Added parameter
         log_dir: str = "logs",
     ):
         super().__init__(
@@ -53,6 +53,7 @@ class C51Trainer(DQNTrainer):
         states, actions, rewards, next_states, dones = self.replay_buffer.sample(
             self.batch_size
         )
+        # pdb.set_trace()
         # Removed pdb.set_trace()
         batch_size = states.size(0)
 
@@ -67,14 +68,17 @@ class C51Trainer(DQNTrainer):
             # 2. Calculate Q-values for next states by taking the expectation over the support
             # self.support is [Atom_Size]. Unsqueeze to allow broadcasting with next_probs.
             # next_q_values shape: [Batch, Action_Size]
-            next_q_values = torch.sum(next_probs * self.support.unsqueeze(0).unsqueeze(0), dim=2)
-            
+            next_q_values = torch.sum(
+                next_probs * self.support.unsqueeze(0).unsqueeze(0), dim=2
+            )
+
             # 3. Select optimal next actions based on these Q-values (greedy policy for target)
             # next_optimal_actions shape: [Batch]
             next_optimal_actions = next_q_values.argmax(1)
 
             # 4. Get the probability distribution for these optimal next actions
             # next_dist_optimal shape: [Batch, Atom_Size]
+            # given each next state optimal actions, their q value distributions
             next_dist_optimal = next_probs[range(batch_size), next_optimal_actions]
 
             # Perform the Bellman update for each atom in the support
@@ -83,10 +87,13 @@ class C51Trainer(DQNTrainer):
             # self.support is [Atom_Size]. rewards is [Batch]. dones is [Batch].
             # After unsqueezing: rewards -> [B,1], self.support -> [1,Atom_Size], dones -> [B,1]
             # t_z (projected_support) shape: [Batch, Atom_Size]
-            projected_support = rewards.unsqueeze(1) + self.gamma * self.support.unsqueeze(0) * (
-                1 - dones.unsqueeze(1).float()  # Ensure dones is float for multiplication
+            projected_support = rewards.unsqueeze(
+                1
+            ) + self.gamma * self.support.unsqueeze(0) * (
+                1
+                - dones.unsqueeze(1).float()  # Ensure dones is float for multiplication
             )
-            
+
             # Clamp the projected support values to be within [v_min, v_max]
             projected_support_clamped = projected_support.clamp(self.v_min, self.v_max)
 
@@ -97,7 +104,7 @@ class C51Trainer(DQNTrainer):
             # b shape: [Batch, Atom_Size]
             b = (projected_support_clamped - self.v_min) / self.delta_z
             l = b.floor().long()  # Lower bound atom index
-            u = b.ceil().long()   # Upper bound atom index
+            u = b.ceil().long()  # Upper bound atom index
 
             # Initialize the target projection distribution (m in the C51 paper)
             # proj_dist shape: [Batch, Atom_Size]
@@ -106,7 +113,7 @@ class C51Trainer(DQNTrainer):
             # Ensure l and u are within bounds [0, atom_size - 1] for indexing scatter_add_
             l_clamped = l.clamp(0, self.atom_size - 1)
             u_clamped = u.clamp(0, self.atom_size - 1)
-            
+
             # Distribute probabilities to the target distribution (proj_dist)
             # This performs the projection of the next state's distribution (next_dist_optimal)
             # onto the support defined by projected_support_clamped.
@@ -118,7 +125,7 @@ class C51Trainer(DQNTrainer):
             # 2. Exact hits (l_j == u_j): Probability mass p_j(s_t+1, a*) is assigned entirely to atom l_j.
 
             # Mask for non-exact hits (where the projected atom b_j is not an integer)
-            non_exact_hit_mask = (l != u)  # Shape: [Batch, Atom_Size]
+            non_exact_hit_mask = l != u  # Shape: [Batch, Atom_Size]
             # Mask for exact hits (where b_j is an integer, so l_j == u_j)
             exact_hit_mask = ~non_exact_hit_mask  # Shape: [Batch, Atom_Size]
 
@@ -128,12 +135,18 @@ class C51Trainer(DQNTrainer):
             val_u_non_exact = next_dist_optimal * (b - l.float())
 
             # Add contributions for non-exact hits to proj_dist, applying the mask
-            proj_dist.scatter_add_(dim=1, index=l_clamped, src=val_l_non_exact * non_exact_hit_mask)
-            proj_dist.scatter_add_(dim=1, index=u_clamped, src=val_u_non_exact * non_exact_hit_mask)
-            
+            proj_dist.scatter_add_(
+                dim=1, index=l_clamped, src=val_l_non_exact * non_exact_hit_mask
+            )
+            proj_dist.scatter_add_(
+                dim=1, index=u_clamped, src=val_u_non_exact * non_exact_hit_mask
+            )
+
             # Add contributions for exact hits to proj_dist, applying the mask
             # For exact hits, the entire probability mass next_dist_optimal[j] goes to atom l_clamped[j]
-            proj_dist.scatter_add_(dim=1, index=l_clamped, src=next_dist_optimal * exact_hit_mask)
+            proj_dist.scatter_add_(
+                dim=1, index=l_clamped, src=next_dist_optimal * exact_hit_mask
+            )
 
         # Get current Q-network's predicted log-probability distribution for (states, actions)
         # `current_log_probs` has shape [Batch, Action_Size, Atom_Size] (log probabilities)
@@ -141,7 +154,9 @@ class C51Trainer(DQNTrainer):
         # Select the log-probabilities for the actions taken: log p(s_t, a_t)
         # actions is [Batch] or [B,1]. If [B,1], squeeze. If [B], ensure long.
         # log_p_taken_actions shape: [Batch, Atom_Size]
-        log_p_taken_actions = current_log_probs[range(batch_size), actions.squeeze().long()]
+        log_p_taken_actions = current_log_probs[
+            range(batch_size), actions.squeeze().long()
+        ]
 
         # Calculate the cross-entropy loss between the target distribution (proj_dist)
         # and the Q-network's predicted distribution for the taken actions (log_p_taken_actions).
@@ -149,7 +164,9 @@ class C51Trainer(DQNTrainer):
         # proj_dist contains target probabilities.
         # log_p_taken_actions contains log of predicted probabilities.
         # To prevent log(0) if any predicted probability is zero after exp(), clamp is used.
-        loss = -(proj_dist * log_p_taken_actions.exp().clamp(min=1e-8).log()).sum(1).mean()
+        loss = (
+            -(proj_dist * log_p_taken_actions.exp().clamp(min=1e-8).log()).sum(1).mean()
+        )
 
         self.optimizer.zero_grad()
         loss.backward()

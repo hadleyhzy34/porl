@@ -2,6 +2,7 @@ import torch
 from porl.env.env import lunarLander
 from porl.train.c51_trainer import C51Trainer
 
+
 def main():
     env, state_size, action_size = lunarLander()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -15,11 +16,15 @@ def main():
         update_target_freq=10,
         device=device,
         atom_size=51,
-        v_min=-10,
-        v_max=10,
+        # v_min=-10,
+        # v_max=10,
+        v_min=-300,
+        v_max=300,
         log_dir="logs",
     )
     trainer.train_online(env)
 
+
 if __name__ == "__main__":
     main()
+
