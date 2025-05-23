@@ -19,15 +19,16 @@ def epsilon_greedy_policy(
     with torch.no_grad():
         q_values = q_network(state_tensor)
 
-    # print(f"q values shape: {q_values.shape}")
-
+    # Removed commented-out print statement
     return q_values.argmax().item()
 
+
+from porl.net.categorical_q_network import CategoricalQNetwork # Import for type hint
 
 def epsilon_greedy_categorical_policy(
     state: np.ndarray,
     epsilon: float,
-    q_network: Callable[[torch.Tensor], torch.Tensor],
+    q_network: CategoricalQNetwork, # Changed type hint for specificity
     action_size: int,
     device: torch.device,
 ) -> int:
@@ -39,6 +40,5 @@ def epsilon_greedy_categorical_policy(
     with torch.no_grad():
         q_values = q_network.get_q_values(state_tensor)
 
-    # print(f"q values shape: {q_values.shape}")
-
+    # Removed commented-out print statement
     return q_values.argmax().item()
