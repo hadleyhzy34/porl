@@ -15,31 +15,21 @@ from porl.utils.logger import Logger
 
 
 class DQNTrainer:
-    """[TODO:description]
+    """trainer framework for dqn learning
 
     Attributes:
-        state_size: [TODO:attribute]
-        action_size: [TODO:attribute]
-        device: [TODO:attribute]
-        gamma: [TODO:attribute]
-        epsilon: [TODO:attribute]
-        epsilon_min: [TODO:attribute]
-        epsilon_decay: [TODO:attribute]
-        update_target_freq: [TODO:attribute]
-        q_network: [TODO:attribute]
-        target_network: [TODO:attribute]
-        optimizer: [TODO:attribute]
-        replay_buffer: [TODO:attribute]
-        batch_size: [TODO:attribute]
-        logger: [TODO:attribute]
-    """
-
-    """A trainer for Deep Q-Network (DQN) reinforcement learning.
-
-    Args:
-        state_size (int): Size of the state space.
-        action_size (int): Number of possible actions.
-        device (torch.device): Device to run the networks on.
+        state_size: state observation dimension
+        action_size: action observation space dimension
+        device: cpu or gpu
+        gamma: gamma parameter
+        epsilon: current random policy probability
+        epsilon_min: minimum random policy probability
+        epsilon_decay: random policy prob decay rate
+        update_target_freq: udpate rate
+        q_network: q network
+        target_network: q network as target
+        optimizer: learning optimizer for q network
+        logger: directory for logs
     """
 
     def __init__(
@@ -55,6 +45,7 @@ class DQNTrainer:
         # network: nn.Module,
         network: Type[nn.Module],
         log_dir: str = "logs",
+        replay_buffer=None,
     ):
         self.state_size = state_size
         self.action_size = action_size
@@ -76,7 +67,9 @@ class DQNTrainer:
 
         # Initialize replay buffer
         # pdb.set_trace()
-        self.replay_buffer = ReplayBuffer(100000, (self.state_size,), device)
+        if replay_buffer is None:
+            self.replay_buffer = ReplayBuffer(100000, (self.state_size,), device)
+
         self.batch_size = 64
 
         # Initialize logger
@@ -135,6 +128,8 @@ class DQNTrainer:
                     self.action_size,
                     self.device,
                 )
+                # pdb.set_trace()
+                # print(action)
                 next_state, reward, done, truncated, _ = env.step(action)
                 done = done or truncated
 
