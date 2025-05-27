@@ -2,6 +2,8 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 from typing import List
+import pdb
+import ipdb
 
 from porl.train.dqn_trainer import DQNTrainer
 from porl.net.qr_dqn_network import QRNetwork
@@ -13,6 +15,7 @@ class QRDQNTrainer(DQNTrainer):
     This trainer implements the learning algorithm for QR-DQN, which models
     the distribution of returns for each action using a set of quantiles.
     """
+
     def __init__(
         self,
         state_size: int,
@@ -26,7 +29,7 @@ class QRDQNTrainer(DQNTrainer):
         network_hidden_sizes: List[int] = [128, 128],
         num_quantiles: int = 51,
         kappa: float = 1.0,
-        learning_rate: float = 5e-4, # Added learning_rate to match DQNTrainer's optimizer
+        learning_rate: float = 5e-4,  # Added learning_rate to match DQNTrainer's optimizer
         log_dir: str = "logs",
     ):
         """
@@ -59,8 +62,7 @@ class QRDQNTrainer(DQNTrainer):
             epsilon_decay=epsilon_decay,
             update_target_freq=update_target_freq,
             device=device,
-            network=None, # Will be overridden
-            lr=learning_rate, # Pass learning_rate to super for consistency if it uses it for other things
+            network=None,  # Will be overridden
             log_dir=log_dir,
             # batch_size is a parameter of DQNTrainer's __init__, should pass it if not using default
             # DQNTrainer's default batch_size is 64. If we want to control it, add to QRDQN params.
@@ -77,7 +79,7 @@ class QRDQNTrainer(DQNTrainer):
             state_size, action_size, self.num_quantiles, network_hidden_sizes
         ).to(self.device)
         self.target_network.load_state_dict(self.q_network.state_dict())
-        self.target_network.eval() # Target network should be in eval mode
+        self.target_network.eval()  # Target network should be in eval mode
 
         # Re-initialize the optimizer with the QRNetwork parameters and the specified learning rate
         self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=learning_rate)
@@ -85,8 +87,12 @@ class QRDQNTrainer(DQNTrainer):
         # Precompute tau values for quantile regression loss
         # tau_i = (2i - 1) / (2N) for i = 1, ..., N (or (2i+1)/(2N) for i=0,...,N-1)
         # Using (2i+1)/(2N) for i = 0, ..., N-1
-        i_tensor = torch.arange(0, self.num_quantiles, device=self.device, dtype=torch.float32)
-        self.tau = ((2 * i_tensor + 1) / (2 * self.num_quantiles)).unsqueeze(0) # Shape: (1, num_quantiles)
+        i_tensor = torch.arange(
+            0, self.num_quantiles, device=self.device, dtype=torch.float32
+        )
+        self.tau = ((2 * i_tensor + 1) / (2 * self.num_quantiles)).unsqueeze(
+            0
+        )  # Shape: (1, num_quantiles)
 
     def learn(self):
         """
@@ -97,6 +103,9 @@ class QRDQNTrainer(DQNTrainer):
         Returns:
             float: The calculated loss value for this learning step.
         """
+        # pdb.set_trace()
+        # ipdb.set_trace()
+        # pdbpp.set_trace()
         states, actions, rewards, next_states, dones = self.replay_buffer.sample(
             self.batch_size
         )
@@ -104,45 +113,57 @@ class QRDQNTrainer(DQNTrainer):
         # Current Quantiles (Z(s,a))
         # current_q_quantiles shape: (batch_size, action_size, num_quantiles)
         current_q_quantiles = self.q_network(states)
-        
+
         # Expand actions to gather the quantiles for the taken actions
-        # actions shape: (batch_size, 1)
+        # actions shape: (batch_size)
         # actions_expanded shape: (batch_size, 1, num_quantiles)
-        actions_expanded = actions.unsqueeze(-1).expand(-1, -1, self.num_quantiles)
-        
+        actions_expanded = actions[:, None, None].expand(-1, -1, self.num_quantiles)
+
         # current_sa_quantiles shape: (batch_size, num_quantiles)
-        current_sa_quantiles = current_q_quantiles.gather(1, actions_expanded).squeeze(1)
+        current_sa_quantiles = current_q_quantiles.gather(1, actions_expanded).squeeze(
+            1
+        )
 
         # Target Quantiles (Target Z'(s',a'))
         with torch.no_grad():
             # Get mean Q-values for next states from the target network for action selection (Double DQN style)
             # Using main network for action selection (argmax Q_online(s',a))
             # then use target network for value evaluation (Z_target(s', argmax Q_online(s',a)))
-            
+
             # Option 1: Standard DQN target (argmax from target network)
             # next_mean_q_values = self.target_network.get_mean_q_values(next_states) # (B, A)
             # next_actions = torch.argmax(next_mean_q_values, dim=1, keepdim=True)    # (B, 1)
-            
+
             # Option 2: Double DQN style target selection (argmax from online network, values from target)
             # This is generally preferred.
-            next_mean_q_values_online = self.q_network.get_mean_q_values(next_states) # (B, A)
-            next_actions = torch.argmax(next_mean_q_values_online, dim=1, keepdim=True) # (B, 1)
+            next_mean_q_values_online = self.q_network.get_mean_q_values(
+                next_states
+            )  # (B, A)
+            next_actions = torch.argmax(
+                next_mean_q_values_online, dim=1, keepdim=True
+            )  # (B, 1)
 
             # Get full quantile distributions for next states from the target network
             # next_q_quantiles shape: (batch_size, action_size, num_quantiles)
             next_q_quantiles_target = self.target_network(next_states)
-            
+
             # Gather the quantiles corresponding to the selected next_actions
             # next_actions_expanded shape: (batch_size, 1, num_quantiles)
-            next_actions_expanded = next_actions.unsqueeze(-1).expand(-1, -1, self.num_quantiles)
-            
+            next_actions_expanded = next_actions.unsqueeze(-1).expand(
+                -1, -1, self.num_quantiles
+            )
+
             # next_sa_quantiles_optimal shape: (batch_size, num_quantiles)
-            next_sa_quantiles_optimal = next_q_quantiles_target.gather(1, next_actions_expanded).squeeze(1)
-            
+            next_sa_quantiles_optimal = next_q_quantiles_target.gather(
+                1, next_actions_expanded
+            ).squeeze(1)
+
             # Compute Bellman target for quantiles: T Z(s,a) = r + gamma * Z(s', a_next_optimal)
             # rewards shape: (batch_size, 1), dones shape: (batch_size, 1)
             # target_sa_quantiles shape: (batch_size, num_quantiles)
-            target_sa_quantiles = rewards + self.gamma * next_sa_quantiles_optimal * (1 - dones.float())
+            target_sa_quantiles = rewards[
+                :, None
+            ] + self.gamma * next_sa_quantiles_optimal * (1 - dones.float()[:, None])
             # No detach needed here as it's already within torch.no_grad()
 
         # Loss Calculation
@@ -151,26 +172,30 @@ class QRDQNTrainer(DQNTrainer):
         # current_sa_quantiles.unsqueeze(1) -> (B, 1, N)
         # Resulting td_error shape: (B, N, N) where N is num_quantiles
         td_error = target_sa_quantiles.unsqueeze(2) - current_sa_quantiles.unsqueeze(1)
-        
+
         # Huber loss calculation
         # huber_loss_case shape: (B, N, N)
         huber_loss_case = (torch.abs(td_error) <= self.kappa).float()
         quadratic_term = 0.5 * td_error.pow(2)
         linear_term = self.kappa * (torch.abs(td_error) - 0.5 * self.kappa)
-        
+
         # element_wise_huber_loss (L_kappa(u_theta_ij)) shape: (B, N, N)
-        element_wise_huber_loss = huber_loss_case * quadratic_term + (1 - huber_loss_case) * linear_term
-        
+        element_wise_huber_loss = (
+            huber_loss_case * quadratic_term + (1 - huber_loss_case) * linear_term
+        )
+
         # Quantile regression loss
         # self.tau shape: (1, N)
         # self.tau.unsqueeze(-1) shape: (1, N, 1) (for broadcasting with td_error's target quantiles dimension)
         # (td_error < 0).float() shape: (B, N, N)
         # abs_tau_minus_indicator shape: (B, N, N)
-        abs_tau_minus_indicator = torch.abs(self.tau.unsqueeze(-1) - (td_error < 0).float())
-        
+        abs_tau_minus_indicator = torch.abs(
+            self.tau.unsqueeze(-1) - (td_error < 0).float()
+        )
+
         # quantile_huber_loss shape: (B, N, N)
         quantile_huber_loss = abs_tau_minus_indicator * element_wise_huber_loss
-        
+
         # Sum over current quantiles (dim 2), mean over target quantiles (dim 1), then mean over batch.
         # The original paper sums over j (dim=2, current_sa_quantiles) and averages over i (dim=1, target_sa_quantiles).
         # Loss = sum_i sum_j L_ij / N (average over i)
@@ -182,18 +207,20 @@ class QRDQNTrainer(DQNTrainer):
         # The paper (https://arxiv.org/pdf/1710.10044.pdf) suggests sum_j rho_tau_i(u_ij)
         # and then average this over i and the batch.
         # So, sum over dim 2 (current_sa_quantiles), then mean over dim 1 (target_sa_quantiles / self.tau), then mean over batch.
-        loss = quantile_huber_loss.mean(dim=1).sum(dim=1).mean() # mean(dim=1) is over target quantiles, sum(dim=1) is over current quantiles
+        loss = (
+            quantile_huber_loss.mean(dim=1).sum(dim=1).mean()
+        )  # mean(dim=1) is over target quantiles, sum(dim=1) is over current quantiles
 
         # Optimizer Step
         self.optimizer.zero_grad()
         loss.backward()
         # Optional: Gradient clipping
-        # Optional: torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), 10.0) 
+        # Optional: torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), 10.0)
         self.optimizer.step()
-        
+
         return loss.item()
 
-    def select_action(self, state: np.ndarray, epsilon: float) -> int:
+    def select_action(self, state: np.ndarray) -> int:
         """
         Selects an action using an epsilon-greedy policy based on mean Q-values.
         This method overrides the `select_action` method in DQNTrainer to use
@@ -203,12 +230,11 @@ class QRDQNTrainer(DQNTrainer):
         Args:
             state (np.ndarray): The current state of the environment.
                                 Shape: (state_size,)
-            epsilon (float): The current value of epsilon for exploration.
-
         Returns:
             int: The selected action (an integer from 0 to action_size-1).
         """
-        if np.random.rand() < epsilon:
+        # ipdb.set_trace()
+        if np.random.rand() < self.epsilon:
             # Explore: select a random action
             return np.random.randint(self.action_size)
         else:
@@ -216,15 +242,17 @@ class QRDQNTrainer(DQNTrainer):
             # Convert state to a PyTorch tensor, add batch dimension, and move to device
             # Ensure state is float, as expected by most PyTorch models.
             state_tensor = torch.from_numpy(state).float().unsqueeze(0).to(self.device)
-            
+
             # Set the network to evaluation mode for deterministic output during inference
             self.q_network.eval()
             with torch.no_grad():
                 # Get mean Q-values from the QR-DQN network
-                mean_q_values = self.q_network.get_mean_q_values(state_tensor) # Shape: (1, action_size)
+                mean_q_values = self.q_network.get_mean_q_values(
+                    state_tensor
+                )  # Shape: (1, action_size)
             # Set the network back to training mode
             self.q_network.train()
-            
+
             # Select the action with the highest mean Q-value
             # .argmax(dim=1) returns indices for each item in batch; .item() gets Python number
             action = mean_q_values.argmax(dim=1).item()
@@ -233,137 +261,3 @@ class QRDQNTrainer(DQNTrainer):
     # Note: The `train_online` method is inherited from DQNTrainer.
     # By overriding `select_action` here, `train_online` will now use this
     # QR-DQN specific action selection mechanism when it calls `self.select_action(state, self.epsilon)`.
-
-```python
-import torch
-import torch.nn.functional as F
-import numpy as np
-from typing import List
-
-from porl.train.dqn_trainer import DQNTrainer
-from porl.net.qr_dqn_network import QRNetwork # Assuming this path is correct relative to where this file will be
-
-
-class QRDQNTrainer(DQNTrainer):
-    """
-    Quantile Regression Deep Q-Network (QR-DQN) Trainer.
-    This trainer implements the learning algorithm for QR-DQN, which models
-    the distribution of returns for each action using a set of quantiles.
-    """
-    def __init__(
-        self,
-        state_size: int,
-        action_size: int,
-        gamma: float,
-        epsilon: float,
-        epsilon_min: float,
-        epsilon_decay: float,
-        update_target_freq: int,
-        device: torch.device,
-        network_hidden_sizes: List[int] = [128, 128],
-        num_quantiles: int = 51,
-        kappa: float = 1.0,
-        learning_rate: float = 5e-4, 
-        log_dir: str = "logs",
-        batch_size: int = 64, # Added batch_size for explicit control
-    ):
-        """
-        Initializes the QRDQNTrainer.
-        (Args documentation as above)
-        """
-        super().__init__(
-            state_size=state_size,
-            action_size=action_size,
-            gamma=gamma,
-            epsilon=epsilon,
-            epsilon_min=epsilon_min,
-            epsilon_decay=epsilon_decay,
-            update_target_freq=update_target_freq,
-            device=device,
-            network=None, 
-            lr=learning_rate, 
-            log_dir=log_dir,
-            batch_size=batch_size, # Pass batch_size to DQNTrainer
-        )
-
-        self.num_quantiles = num_quantiles
-        if self.num_quantiles <= 0:
-            raise ValueError("num_quantiles must be positive.")
-        self.kappa = kappa
-
-        self.q_network = QRNetwork(
-            state_size, action_size, self.num_quantiles, network_hidden_sizes
-        ).to(self.device)
-        self.target_network = QRNetwork(
-            state_size, action_size, self.num_quantiles, network_hidden_sizes
-        ).to(self.device)
-        self.target_network.load_state_dict(self.q_network.state_dict())
-        self.target_network.eval()
-
-        self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=learning_rate)
-
-        i_tensor = torch.arange(0, self.num_quantiles, device=self.device, dtype=torch.float32)
-        self.tau = ((2 * i_tensor + 1) / (2 * self.num_quantiles)).unsqueeze(0) # Shape: (1, num_quantiles)
-
-    def learn(self):
-        states, actions, rewards, next_states, dones = self.replay_buffer.sample(
-            self.batch_size
-        )
-        # states: (B, S_dim), actions: (B, 1), rewards: (B, 1), next_states: (B, S_dim), dones: (B, 1)
-
-        # Current Quantiles: Z_theta(s,a)
-        current_q_quantiles = self.q_network(states) # (B, A, N)
-        # actions is (B,1). Need to make it (B,1,1) for gather, then expand for N quantiles
-        actions_expanded = actions.unsqueeze(-1).expand(-1, -1, self.num_quantiles) # (B, 1, N)
-        current_sa_quantiles = current_q_quantiles.gather(1, actions_expanded).squeeze(1) # (B, N)
-
-        with torch.no_grad():
-            # Target Quantiles: r + gamma * Z_theta_target(s', a'_optimal)
-            # Select optimal next actions a'_optimal using the online network (Double DQN)
-            next_mean_q_values_online = self.q_network.get_mean_q_values(next_states) # (B, A)
-            next_actions = torch.argmax(next_mean_q_values_online, dim=1, keepdim=True) # (B, 1)
-
-            # Get quantile distribution for a'_optimal from the target network
-            next_q_quantiles_target = self.target_network(next_states) # (B, A, N)
-            next_actions_expanded = next_actions.unsqueeze(-1).expand(-1, -1, self.num_quantiles) # (B, 1, N)
-            next_sa_quantiles_optimal = next_q_quantiles_target.gather(1, next_actions_expanded).squeeze(1) # (B, N)
-            
-            # Compute Bellman target: T Z(s,a) = r + gamma * Z(s', a'_optimal)
-            # Ensure `dones` is float for multiplication.
-            target_sa_quantiles = rewards + self.gamma * next_sa_quantiles_optimal * (1 - dones.float()) # (B, N)
-            # No .detach() needed as it's within torch.no_grad()
-
-        # Quantile Huber Loss Calculation
-        # td_error (u_ij) shape: (B, N_target, N_current) which is (B, N, N)
-        # td_error[b, i, j] = target_quantile_i[b] - current_quantile_j[b]
-        td_error = target_sa_quantiles.unsqueeze(1) - current_sa_quantiles.unsqueeze(2) 
-        # Corrected: target_sa_quantiles.unsqueeze(2) (B,N,1), current_sa_quantiles.unsqueeze(1) (B,1,N)
-        # td_error[b,i,j] = target_quantile_i - current_quantile_j
-        # target_sa_quantiles.unsqueeze(2) -> (B, num_quantiles, 1)
-        # current_sa_quantiles.unsqueeze(1) -> (B, 1, num_quantiles)
-        # This makes td_error[b, target_idx, current_idx]
-
-        huber_loss_case = (torch.abs(td_error) <= self.kappa).float() # (B, N, N)
-        quadratic_term = 0.5 * td_error.pow(2)
-        linear_term = self.kappa * (torch.abs(td_error) - 0.5 * self.kappa)
-        element_wise_huber_loss = huber_loss_case * quadratic_term + (1 - huber_loss_case) * linear_term # (B, N, N)
-
-        # self.tau has shape (1, N) representing tau_i for target quantiles
-        # self.tau.unsqueeze(-1) gives (1, N, 1) to align with target dimension of td_error
-        # (td_error < 0).float() is (B, N, N)
-        # abs_tau_minus_indicator[b, i, j] = |tau_i - I(u_ij < 0)|
-        abs_tau_minus_indicator = torch.abs(self.tau.unsqueeze(-1) - (td_error < 0).float()) # (B, N, N)
-        
-        quantile_huber_loss = abs_tau_minus_indicator * element_wise_huber_loss # (B, N, N)
-        
-        # Sum over current quantiles (dim 2, index j), mean over target quantiles (dim 1, index i), mean over batch.
-        loss = quantile_huber_loss.sum(dim=2).mean(dim=1).mean()
-
-        self.optimizer.zero_grad()
-        loss.backward()
-        # Optional: torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), 10.0)
-        self.optimizer.step()
-        
-        return loss.item()
-
-```

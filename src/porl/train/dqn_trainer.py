@@ -1,4 +1,4 @@
-import pdb
+import ipdb
 from typing import List, Tuple, Union, Callable, Type
 
 import gymnasium as gym
@@ -43,7 +43,7 @@ class DQNTrainer:
         update_target_freq: int,
         device: torch.device,
         # network: nn.Module,
-        network: Type[nn.Module],
+        network: Type[nn.Module] | None,
         log_dir: str = "logs",
         replay_buffer=None,
     ):
@@ -59,11 +59,12 @@ class DQNTrainer:
         self.update_target_freq = update_target_freq
 
         # Initialize networks and optimizer
-        self.q_network = network(state_size, action_size).to(device)
-        self.target_network = network(state_size, action_size).to(device)
-        self.target_network.load_state_dict(self.q_network.state_dict())
-        self.target_network.eval()
-        self.optimizer = optim.Adam(self.q_network.parameters(), lr=0.0005)
+        if network is not None:
+            self.q_network = network(state_size, action_size).to(device)
+            self.target_network = network(state_size, action_size).to(device)
+            self.target_network.load_state_dict(self.q_network.state_dict())
+            self.target_network.eval()
+            self.optimizer = optim.Adam(self.q_network.parameters(), lr=0.0005)
 
         # Initialize replay buffer
         # pdb.set_trace()
@@ -121,13 +122,14 @@ class DQNTrainer:
             episode_reward = 0
 
             for step in range(max_steps):
-                action = epsilon_greedy_policy(
-                    state,
-                    self.epsilon,
-                    self.q_network,
-                    self.action_size,
-                    self.device,
-                )
+                # action = epsilon_greedy_policy(
+                #     state,
+                #     self.epsilon,
+                #     self.q_network,
+                #     self.action_size,
+                #     self.device,
+                # )
+                action = self.select_action(state)
                 # pdb.set_trace()
                 # print(action)
                 next_state, reward, done, truncated, _ = env.step(action)
@@ -192,3 +194,30 @@ class DQNTrainer:
 
         self.logger.close()
         return losses
+
+    def select_action(self, state: np.ndarray) -> int:
+        """
+        Selects an action using an epsilon-greedy policy based on mean Q-values.
+        This method overrides the `select_action` method in DQNTrainer to use
+        the mean of the quantile distribution for action selection, which is
+        appropriate for QR-DQN.
+
+        Args:
+            state (np.ndarray): The current state of the environment.
+                                Shape: (state_size,)
+
+        Returns:
+            int: The selected action (an integer from 0 to action_size-1).
+        """
+        # ipdb.set_trace()
+
+        if np.random.rand() < self.epsilon:
+            return np.random.randint(self.action_size)
+
+        state_tensor = torch.from_numpy(state).unsqueeze(0).to(self.device)
+
+        with torch.no_grad():
+            q_values = self.q_network(state_tensor)
+
+        # Removed commented-out print statement
+        return q_values.argmax().item()
