@@ -40,6 +40,7 @@ class DQNTrainer:
         epsilon: float,
         epsilon_min: float,
         epsilon_decay: float,
+        learning_rate: float,
         update_target_freq: int,
         device: torch.device,
         # network: nn.Module,
@@ -56,6 +57,7 @@ class DQNTrainer:
         self.epsilon = epsilon
         self.epsilon_min = epsilon_min
         self.epsilon_decay = epsilon_decay
+        self.learning_rate = learning_rate
         self.update_target_freq = update_target_freq
 
         # Initialize networks and optimizer
@@ -78,7 +80,7 @@ class DQNTrainer:
 
         # Log hyperparameters
         hparams = {
-            "learning_rate": 0.0005,
+            "learning_rate": self.learning_rate,
             "gamma": self.gamma,
             "batch_size": self.batch_size,
             "epsilon_decay": self.epsilon_decay,

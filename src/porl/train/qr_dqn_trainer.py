@@ -60,6 +60,7 @@ class QRDQNTrainer(DQNTrainer):
             epsilon=epsilon,
             epsilon_min=epsilon_min,
             epsilon_decay=epsilon_decay,
+            learning_rate=learning_rate,
             update_target_freq=update_target_freq,
             device=device,
             network=None,  # Will be overridden
