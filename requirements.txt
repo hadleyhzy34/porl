@@ -1,5 +1,6 @@
 torch
 numpy
+gymnasium[box2d]
+matplotlib
 tqdm
-"gymnasium[box2d]"
 tensorboard
