@@ -47,6 +47,7 @@ class DQNTrainer:
         network: Type[nn.Module] | None,
         log_dir: str = "logs",
         replay_buffer=None,
+        transition_learning_step=10000,
     ):
         self.state_size = state_size
         self.action_size = action_size
@@ -59,6 +60,7 @@ class DQNTrainer:
         self.epsilon_decay = epsilon_decay
         self.learning_rate = learning_rate
         self.update_target_freq = update_target_freq
+        self.training_learning_step = transition_learning_step
 
         # Initialize networks and optimizer
         if network is not None:
@@ -141,10 +143,13 @@ class DQNTrainer:
                 state = next_state
                 episode_reward += reward
 
+                # ipdb.set_trace()
                 # Log the reward for this step (loss will be logged after training)
                 self.logger.log_step(episode, step, reward, None, self.epsilon)
+                # print(f"episode:{episode},step:{step},reward:{reward}")
 
-                if len(self.replay_buffer) >= self.batch_size:
+                # if len(self.replay_buffer) >= self.batch_size:
+                if len(self.replay_buffer) >= self.training_learning_step:
                     if policy is None:
                         loss = self.learn()
                     else:
@@ -156,6 +161,7 @@ class DQNTrainer:
                     break
 
             # pdb.set_trace()
+            # ipdb.set_trace()
             self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
             if episode % self.update_target_freq == 0:
                 self.target_network.load_state_dict(self.q_network.state_dict())

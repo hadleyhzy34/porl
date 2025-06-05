@@ -15,7 +15,6 @@ class QRDQNTrainer(DQNTrainer):
     This trainer implements the learning algorithm for QR-DQN, which models
     the distribution of returns for each action using a set of quantiles.
     """
-
     def __init__(
         self,
         state_size: int,
@@ -208,9 +207,10 @@ class QRDQNTrainer(DQNTrainer):
         # The paper (https://arxiv.org/pdf/1710.10044.pdf) suggests sum_j rho_tau_i(u_ij)
         # and then average this over i and the batch.
         # So, sum over dim 2 (current_sa_quantiles), then mean over dim 1 (target_sa_quantiles / self.tau), then mean over batch.
-        loss = (
-            quantile_huber_loss.mean(dim=1).sum(dim=1).mean()
-        )  # mean(dim=1) is over target quantiles, sum(dim=1) is over current quantiles
+        # loss = (
+        #     quantile_huber_loss.mean(dim=1).sum(dim=1).mean()
+        # )  # mean(dim=1) is over target quantiles, sum(dim=1) is over current quantiles
+        loss = quantile_huber_loss.sum(dim=2).mean()  # sum over current quantiles, mean over batch
 
         # Optimizer Step
         self.optimizer.zero_grad()
